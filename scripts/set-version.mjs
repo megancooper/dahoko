@@ -66,7 +66,7 @@ export async function setVersion(rawVersion, { check = false } = {}) {
     ),
     updateText(
       cargoLock,
-      /(\[\[package\]\]\nname = "dahoko"\nversion = ")[^"]+(")/,
+      /(\[\[package\]\]\r?\nname = "dahoko"\r?\nversion = ")[^"]+(")/,
       (_match, prefix, suffix) => `${prefix}${version}${suffix}`,
       "Cargo lockfile package",
       check,
