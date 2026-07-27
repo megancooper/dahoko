@@ -9,11 +9,13 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "test:release": "node --test scripts/*.test.mjs",
     "typecheck": "turbo run typecheck",
-    "verify": "pnpm lint && pnpm test && pnpm typecheck && pnpm build",
+    "verify": "node --test scripts/*.test.mjs && turbo run lint && turbo run test && turbo run typecheck && turbo run build",
     "clean": "turbo run clean"
   },
   "devDependencies": {
+    "@semantic-release/git": "11.0.1",
     "conventional-changelog-conventionalcommits": "10.2.1",
     "semantic-release": "25.0.8",
     "turbo": "2.5.0"

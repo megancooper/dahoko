@@ -43,15 +43,28 @@ pair once and keep the private key somewhere durable and private:
 pnpm tauri signer generate -w ~/.tauri/dahoko.key
 ```
 
-Add these GitHub Actions secrets before publishing an `app-v*` tag:
+Add these GitHub Actions secrets before publishing:
 
 - `TAURI_SIGNING_PRIVATE_KEY` — the private key contents
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — its password, if one was set
 - `TAURI_UPDATER_PUBKEY` — the contents of `~/.tauri/dahoko.key.pub`
 
-The release workflow verifies the workspace, builds signed updater artifacts,
-and lets Tauri Action publish them, including `latest.json`, to a GitHub
-release. To use another update service, change the updater endpoint in
+Releases are generated from Conventional Commit messages pushed to `main`.
+The release controller verifies the workspace, determines the next semantic
+version, synchronizes the package/Tauri/Cargo versions, creates an `app-v*`
+tag and GitHub release notes, then calls the signed desktop build for macOS
+(Apple silicon and Intel), Windows, and Linux.
+
+| Commit | Release |
+| --- | --- |
+| `fix:`, `perf:`, `chore:`, `ci:`, `docs:`, `refactor:`, `test:`, `build:`, `style:`, `revert:` | Patch |
+| `feat:` | Minor |
+| `type!:` or a `BREAKING CHANGE:` / `BREAKING:` footer | Major |
+
+The desktop workflow can also be run manually with an exact existing SemVer
+for release recovery. It validates and applies that version before packaging,
+so artifacts, the app badge, the tag, and `latest.json` stay aligned. To use
+another update service, change the updater endpoint in
 `apps/desktop/src-tauri/tauri.conf.json`.
 
 ## Views
