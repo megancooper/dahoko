@@ -27,6 +27,7 @@ export {
   DialogTitle,
   DialogDescription,
 } from "./components/dialog";
+export { releaseStaleDialogPointerLock } from "./components/dialog-lock";
 export {
   DropdownMenu,
   DropdownMenuTrigger,

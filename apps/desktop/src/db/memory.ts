@@ -7,6 +7,8 @@ import type {
   RepoSnapshot,
   Subtask,
   TaskPatch,
+  Workspace,
+  WorkspaceBundleSnapshot,
 } from "./repo";
 import { newId, nowIso } from "./repo";
 
@@ -24,13 +26,64 @@ function isoDate(offsetDays: number): string {
  * without a Rust build). Seeds a handful of sample tasks; nothing persists.
  */
 export class MemoryRepo implements Repo {
-  private tasks: Task[] = [];
-  private lists: List[] = [];
-  private statuses: Status[] = [];
-  private subtasks: Subtask[] = [];
-  private completions: Completion[] = [];
+  private workspaces: Workspace[] = [];
+  private workspaceData = new Map<string, RepoSnapshot>();
+  private activeWorkspaceId = "workspace-personal";
+
+  private get activeData(): RepoSnapshot {
+    const data = this.workspaceData.get(this.activeWorkspaceId);
+    if (!data) throw new Error("The active workspace no longer exists.");
+    return data;
+  }
+
+  private get tasks() {
+    return this.activeData.tasks;
+  }
+  private set tasks(value: Task[]) {
+    this.activeData.tasks = value;
+  }
+  private get lists() {
+    return this.activeData.lists;
+  }
+  private set lists(value: List[]) {
+    this.activeData.lists = value;
+  }
+  private get statuses() {
+    return this.activeData.statuses;
+  }
+  private set statuses(value: Status[]) {
+    this.activeData.statuses = value;
+  }
+  private get subtasks() {
+    return this.activeData.subtasks;
+  }
+  private set subtasks(value: Subtask[]) {
+    this.activeData.subtasks = value;
+  }
+  private get completions() {
+    return this.activeData.completions;
+  }
+  private set completions(value: Completion[]) {
+    this.activeData.completions = value;
+  }
 
   async init(): Promise<void> {
+    this.workspaces = [
+      {
+        id: this.activeWorkspaceId,
+        name: "Personal",
+        color: "#A3D0FF",
+        sortOrder: 0,
+        createdAt: nowIso(),
+      },
+    ];
+    this.workspaceData.set(this.activeWorkspaceId, {
+      tasks: [],
+      lists: [],
+      statuses: [],
+      subtasks: [],
+      completions: [],
+    });
     this.statuses = DEFAULT_STATUSES.map((s, i) => ({
       ...s,
       id: `status-${i}`,
@@ -141,6 +194,47 @@ export class MemoryRepo implements Repo {
         sortOrder: 2,
       },
     ];
+  }
+
+  async listWorkspaces(): Promise<Workspace[]> {
+    return this.workspaces.map((workspace) => ({ ...workspace }));
+  }
+
+  getActiveWorkspaceId(): string {
+    return this.activeWorkspaceId;
+  }
+
+  async setActiveWorkspace(id: string): Promise<void> {
+    if (!this.workspaceData.has(id)) {
+      throw new Error("That workspace no longer exists.");
+    }
+    this.activeWorkspaceId = id;
+  }
+
+  async createWorkspace(name: string, color: string): Promise<Workspace> {
+    if (this.workspaces.length >= 100) {
+      throw new Error("Dahoko supports up to 100 workspaces.");
+    }
+    const id = newId();
+    const workspace: Workspace = {
+      id,
+      name,
+      color,
+      sortOrder: this.workspaces.length,
+      createdAt: nowIso(),
+    };
+    this.workspaces.push(workspace);
+    this.workspaceData.set(id, {
+      tasks: [],
+      lists: [],
+      statuses: DEFAULT_STATUSES.map((status, index) => ({
+        ...status,
+        id: `${id}:status-${index}`,
+      })),
+      subtasks: [],
+      completions: [],
+    });
+    return { ...workspace };
   }
 
   /** Deterministic completion history so the metrics view has data in dev. */
@@ -306,5 +400,56 @@ export class MemoryRepo implements Repo {
     this.completions = data.completions.map((completion) => ({
       ...completion,
     }));
+  }
+
+  async exportWorkspaceBundle(): Promise<WorkspaceBundleSnapshot> {
+    return {
+      workspaces: this.workspaces.map((workspace) => {
+        const data = this.workspaceData.get(workspace.id)!;
+        return {
+          workspace: { ...workspace },
+          data: {
+            tasks: data.tasks.map((task) => ({
+              ...task,
+              tags: [...task.tags],
+            })),
+            lists: data.lists.map((list) => ({ ...list })),
+            statuses: data.statuses.map((status) => ({ ...status })),
+            subtasks: data.subtasks.map((subtask) => ({ ...subtask })),
+            completions: data.completions.map((completion) => ({
+              ...completion,
+            })),
+          },
+        };
+      }),
+    };
+  }
+
+  async replaceWorkspaceBundle(
+    bundle: WorkspaceBundleSnapshot,
+  ): Promise<void> {
+    this.workspaces = bundle.workspaces.map(({ workspace }) => ({
+      ...workspace,
+    }));
+    this.workspaceData = new Map(
+      bundle.workspaces.map(({ workspace, data }) => [
+        workspace.id,
+        {
+          tasks: data.tasks.map((task) => ({
+            ...task,
+            tags: [...task.tags],
+          })),
+          lists: data.lists.map((list) => ({ ...list })),
+          statuses: data.statuses.map((status) => ({ ...status })),
+          subtasks: data.subtasks.map((subtask) => ({ ...subtask })),
+          completions: data.completions.map((completion) => ({
+            ...completion,
+          })),
+        },
+      ]),
+    );
+    if (!this.workspaceData.has(this.activeWorkspaceId)) {
+      this.activeWorkspaceId = this.workspaces[0].id;
+    }
   }
 }

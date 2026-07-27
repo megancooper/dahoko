@@ -7,6 +7,7 @@ An open-source task manager (a TickTick alternative), built with Tauri v2, React
 | Path | What it is |
 | --- | --- |
 | `apps/desktop` | The Tauri v2 desktop app (React 19 + Vite + TanStack Router, SQLite via `tauri-plugin-sql`) |
+| `apps/sync-server` | Optional privacy-focused encrypted sync server (Node + SQLite) |
 | `apps/www` | Landing page (Vite + React) |
 | `packages/ui` | Shared component library (Radix + Tailwind) |
 | `packages/core` | Task domain types, quick-add parser, grouping/view logic |
@@ -24,10 +25,31 @@ pnpm tauri dev
 
 # Landing page on :5102
 pnpm dev:www
+
+# Optional encrypted sync server on 127.0.0.1:8787
+pnpm --filter @dahoko/sync-server build
+DAHOKO_ACCOUNT_HASH_KEY="$(openssl rand -hex 32)" \
+  pnpm --filter @dahoko/sync-server start
 ```
 
 The desktop frontend also runs in a plain browser (`pnpm --filter @dahoko/desktop dev`)
 with an in-memory database — handy for UI work without a Rust build.
+
+## Encrypted device sync
+
+Sync is optional and remains offline-first. Workspace and task data is
+encrypted in the desktop app with a separate passphrase before it is uploaded.
+The server stores an opaque authenticated-encryption blob and cannot read
+workspace names, task titles, notes, lists, tags, dates, subtasks, or
+completion history.
+
+The same MIT-licensed server can be self-hosted with Docker, deployed to a
+container host, or used for a hosted Dahoko service. Official desktop builds
+can prefill the hosted endpoint with the `DAHOKO_SYNC_URL` GitHub repository
+variable; users can always enter another HTTPS server in Settings.
+
+See [docs/sync.md](docs/sync.md) for the threat model, deployment instructions,
+backups, API, and cryptographic design.
 
 ## Desktop updates
 
@@ -74,6 +96,14 @@ Tasks live in one SQLite database and can be viewed as:
 - **List** — grouped by due date (Overdue / Today / Upcoming / Someday)
 - **Swimlanes** — user-defined status columns, drag to move
 - **By tag** — grouped by tag, list, or priority
+
+## Workspaces
+
+The sidebar workspace switcher keeps Personal, Work, or project-specific task
+sets isolated inside the same local database. Creating a workspace seeds its
+own workflow statuses, switching is remembered on the device, and encrypted
+sync carries every workspace to connected devices without exposing workspace
+names to the server.
 
 ## License
 

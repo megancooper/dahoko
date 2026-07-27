@@ -54,4 +54,22 @@ describe("MemoryRepo.replaceData", () => {
     await expect(repo.listSubtasks("task-imported")).resolves.toEqual([]);
     await expect(repo.listCompletions()).resolves.toEqual([]);
   });
+
+  it("isolates records while switching between workspaces", async () => {
+    const repo = new MemoryRepo();
+    await repo.init();
+    const personalId = repo.getActiveWorkspaceId();
+    const work = await repo.createWorkspace("Work", "#FFD3A3");
+    await repo.setActiveWorkspace(work.id);
+    await repo.createTask({ title: "Work-only task" });
+
+    await expect(repo.listTasks()).resolves.toEqual([
+      expect.objectContaining({ title: "Work-only task" }),
+    ]);
+    await repo.setActiveWorkspace(personalId);
+    const personalTasks = await repo.listTasks();
+    expect(personalTasks.some((task) => task.title === "Work-only task")).toBe(
+      false,
+    );
+  });
 });

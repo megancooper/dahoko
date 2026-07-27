@@ -18,6 +18,7 @@ import {
 import {
   useSettings,
   type DefaultView,
+  type DefaultViewContext,
   type ThemePreference,
 } from "@/state/settings";
 import { useUpdater } from "@/state/updater";
@@ -30,11 +31,25 @@ import {
   type DahokoBackup,
 } from "@/db/backup";
 import { isTauri } from "@/db";
+import { SyncSettings } from "./sync-settings";
 
 type DataMessage = {
   tone: "neutral" | "success" | "error";
   text: string;
 } | null;
+
+const DEFAULT_VIEW_SECTIONS: ReadonlyArray<{
+  context: DefaultViewContext;
+  label: string;
+}> = [
+  { context: "inbox", label: "Inbox" },
+  { context: "today", label: "Today" },
+  { context: "next7", label: "Next 7 days" },
+  { context: "completed", label: "Completed" },
+  { context: "recurring", label: "Recurring" },
+  { context: "lists", label: "Lists" },
+  { context: "tags", label: "Tag filters" },
+];
 
 function SettingRow({
   icon,
@@ -82,7 +97,11 @@ export function SettingsDialog({
     checkForUpdates,
     installUpdate,
   } = useUpdater();
-  const { createDataBackup, restoreDataBackup } = useStore();
+  const {
+    activeWorkspace,
+    createDataBackup,
+    restoreDataBackup,
+  } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingBackup, setPendingBackup] = useState<DahokoBackup | null>(null);
   const [dataBusy, setDataBusy] = useState(false);
@@ -99,7 +118,13 @@ export function SettingsDialog({
     try {
       const backup = createDataBackup();
       const contents = serializeBackup(backup);
-      const filename = `dahoko-backup-${backup.exportedAt.slice(0, 10)}.json`;
+      const workspaceSlug =
+        activeWorkspace?.name
+          .toLocaleLowerCase()
+          .replace(/[^\p{L}\p{N}]+/gu, "-")
+          .replace(/^-|-$/g, "")
+          .slice(0, 48) || "workspace";
+      const filename = `dahoko-${workspaceSlug}-backup-${backup.exportedAt.slice(0, 10)}.json`;
 
       if (isTauri()) {
         const [{ save }, { writeTextFile }] = await Promise.all([
@@ -132,7 +157,7 @@ export function SettingsDialog({
 
       setDataMessage({
         tone: "success",
-        text: "Backup exported. Keep it somewhere secure.",
+        text: "Workspace backup exported. Keep it somewhere secure.",
       });
     } catch {
       setDataMessage({
@@ -209,7 +234,7 @@ export function SettingsDialog({
         onOpenChange(nextOpen);
       }}
     >
-      <DialogContent className="max-h-[calc(100dvh-3rem)] max-w-[480px] overflow-y-auto">
+      <DialogContent className="max-h-[calc(100dvh-3rem)] max-w-[520px] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
@@ -240,27 +265,56 @@ export function SettingsDialog({
             </Select>
           </SettingRow>
 
-          <SettingRow
-            icon={<LayoutGrid className={iconClass} />}
-            label="Default view"
-            hint="View used when the app opens"
+          <section
+            aria-labelledby="default-views-title"
+            className="rounded-lg border border-border bg-muted/35 p-3"
           >
-            <Select
-              value={settings.defaultView}
-              onValueChange={(value) =>
-                updateSettings({ defaultView: value as DefaultView })
-              }
-            >
-              <SelectTrigger aria-label="Default view">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="list">List</SelectItem>
-                <SelectItem value="board">Swimlanes</SelectItem>
-                <SelectItem value="tags">By tag</SelectItem>
-              </SelectContent>
-            </Select>
-          </SettingRow>
+            <div className="flex items-center gap-2">
+              <LayoutGrid className={iconClass} aria-hidden="true" />
+              <h3 id="default-views-title" className="text-[13px] font-medium">
+                Default views
+              </h3>
+            </div>
+            <p className="mt-1 pl-[22px] text-[11.5px] leading-relaxed text-muted-foreground">
+              Choose how each sidebar destination opens.
+            </p>
+
+            <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5">
+              {DEFAULT_VIEW_SECTIONS.map(({ context, label }) => {
+                const triggerId = `default-view-${context}`;
+                return (
+                  <div key={context} className="min-w-0">
+                    <label
+                      htmlFor={triggerId}
+                      className="mb-1 block text-[11.5px] font-medium text-muted-foreground"
+                    >
+                      {label}
+                    </label>
+                    <Select
+                      value={settings.defaultViews[context]}
+                      onValueChange={(value) =>
+                        updateSettings({
+                          defaultViews: {
+                            ...settings.defaultViews,
+                            [context]: value as DefaultView,
+                          },
+                        })
+                      }
+                    >
+                      <SelectTrigger id={triggerId}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="list">List</SelectItem>
+                        <SelectItem value="board">Swimlanes</SelectItem>
+                        <SelectItem value="tags">By tag</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
 
           <SettingRow
             icon={<Eye className={iconClass} />}
@@ -279,6 +333,8 @@ export function SettingsDialog({
           </SettingRow>
 
           <div className="h-px bg-border" />
+
+          <SyncSettings />
 
           <section
             aria-labelledby="app-updates-title"
@@ -364,7 +420,7 @@ export function SettingsDialog({
                 </h3>
                 <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
                   Export a portable JSON backup or replace local data from a
-                  backup you trust.
+                  backup you trust. This applies to the current workspace.
                 </p>
               </div>
             </div>
@@ -402,7 +458,7 @@ export function SettingsDialog({
             {pendingBackup ? (
               <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3">
                 <p className="text-[12px] font-medium">
-                  Replace all current data?
+                  Replace this workspace’s data?
                 </p>
                 <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
                   Valid backup from{" "}
@@ -410,7 +466,7 @@ export function SettingsDialog({
                   {pendingBackup.data.tasks.length} tasks,{" "}
                   {pendingBackup.data.lists.length} lists, and{" "}
                   {pendingBackup.data.subtasks.length} subtasks. This cannot be
-                  undone unless you export your current data first.
+                  undone unless you export this workspace first.
                 </p>
                 <div className="mt-3 flex justify-end gap-2">
                   <Button
@@ -432,7 +488,7 @@ export function SettingsDialog({
                     disabled={dataBusy}
                     onClick={() => void confirmImport()}
                   >
-                    {dataBusy ? "Importing…" : "Replace data"}
+                    {dataBusy ? "Importing…" : "Replace workspace"}
                   </Button>
                 </div>
               </div>

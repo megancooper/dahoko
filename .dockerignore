@@ -1,0 +1,7 @@
+.git
+.github
+.turbo
+**/node_modules
+**/dist
+**/target
+apps/desktop/src-tauri/target

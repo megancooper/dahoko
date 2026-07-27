@@ -7,45 +7,51 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  normalizeSettings,
+  type Settings,
+  type ThemePreference,
+} from "./settings-model";
 
-export type ThemePreference = "system" | "light" | "dark";
-export type DefaultView = "list" | "board" | "tags";
-
-export interface Settings {
-  theme: ThemePreference;
-  defaultView: DefaultView;
-  /** Keep tasks completed today visible in the Inbox */
-  showCompletedInInbox: boolean;
-}
+export {
+  DEFAULT_SETTINGS,
+  DEFAULT_VIEW_CONTEXTS,
+  defaultViewContextForFilter,
+  defaultViewForFilter,
+  isDefaultView,
+  normalizeSettings,
+  type DefaultView,
+  type DefaultViewContext,
+  type DefaultViews,
+  type Settings,
+  type ThemePreference,
+} from "./settings-model";
 
 const SETTINGS_KEY = "dahoko.settings";
 /** Theme lives in its own key so the pre-paint script and ThemeToggle share it. */
 const THEME_KEY = "dahoko.theme";
 
-const DEFAULTS: Settings = {
-  theme: "system",
-  defaultView: "list",
-  showCompletedInInbox: true,
-};
-
 function loadSettings(): Settings {
-  let stored: Partial<Settings> = {};
+  let stored: unknown = {};
+  let storedTheme: string | null = null;
   try {
     stored = JSON.parse(window.localStorage.getItem(SETTINGS_KEY) ?? "{}");
+    storedTheme = window.localStorage.getItem(THEME_KEY);
   } catch {
-    // Corrupt settings fall back to defaults.
+    // Corrupt or inaccessible settings fall back to validated defaults.
   }
-  const storedTheme = window.localStorage.getItem(THEME_KEY);
-  const theme: ThemePreference =
-    storedTheme === "light" || storedTheme === "dark" ? storedTheme : "system";
-  return { ...DEFAULTS, ...stored, theme };
+  return normalizeSettings(stored, storedTheme);
 }
 
 function applyTheme(theme: ThemePreference) {
-  if (theme === "system") {
-    window.localStorage.removeItem(THEME_KEY);
-  } else {
-    window.localStorage.setItem(THEME_KEY, theme);
+  try {
+    if (theme === "system") {
+      window.localStorage.removeItem(THEME_KEY);
+    } else {
+      window.localStorage.setItem(THEME_KEY, theme);
+    }
+  } catch {
+    // A denied storage write should not stop the UI from applying the theme.
   }
   const dark =
     theme === "dark" ||
@@ -66,9 +72,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     setSettings((prev) => {
-      const next = { ...prev, ...patch };
+      const next = normalizeSettings(
+        {
+          ...prev,
+          ...patch,
+          defaultViews: patch.defaultViews ?? prev.defaultViews,
+        },
+        patch.theme ?? prev.theme,
+      );
       const { theme, ...rest } = next;
-      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(rest));
+      try {
+        window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(rest));
+      } catch {
+        // Keep the in-memory preference when local storage is unavailable.
+      }
       if (patch.theme !== undefined) applyTheme(theme);
       return next;
     });

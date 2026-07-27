@@ -27,6 +27,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0002_recurrence.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "add isolated workspaces",
+            sql: include_str!("../migrations/0003_workspaces.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -34,7 +40,9 @@ fn migrations() -> Vec<Migration> {
 pub fn run() {
     let builder = tauri::Builder::default().invoke_handler(tauri::generate_handler![
         updater_is_configured,
-        backup::replace_all_data
+        backup::replace_all_data,
+        backup::create_workspace,
+        backup::replace_workspace_bundle
     ]);
 
     #[cfg(desktop)]

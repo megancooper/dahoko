@@ -2,8 +2,45 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import * as React from "react";
 import { cn } from "../lib/utils";
+import { releaseStaleDialogPointerLock } from "./dialog-lock";
 
-const Dialog = DialogPrimitive.Root;
+function schedulePointerLockCleanup() {
+  if (typeof window === "undefined") return;
+  window.setTimeout(() => releaseStaleDialogPointerLock(), 220);
+}
+
+function Dialog({
+  onOpenChange,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Root>) {
+  const previousOpen = React.useRef(props.open);
+
+  React.useEffect(() => {
+    if (previousOpen.current === true && props.open === false) {
+      schedulePointerLockCleanup();
+    }
+    previousOpen.current = props.open;
+  }, [props.open]);
+
+  React.useEffect(
+    () => () => {
+      schedulePointerLockCleanup();
+    },
+    [],
+  );
+
+  return (
+    <DialogPrimitive.Root
+      {...props}
+      onOpenChange={(open) => {
+        onOpenChange?.(open);
+        if (!open) schedulePointerLockCleanup();
+      }}
+    />
+  );
+}
+Dialog.displayName = "Dialog";
+
 const DialogTrigger = DialogPrimitive.Trigger;
 const DialogPortal = DialogPrimitive.Portal;
 const DialogClose = DialogPrimitive.Close;

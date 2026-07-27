@@ -1,0 +1,21 @@
+{
+  "name": "@dahoko/sync-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "test": "pnpm build && node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "node -e \"process.exit(0)\"",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@dahoko/typescript-config": "workspace:*",
+    "@types/node": "26.1.1",
+    "tsx": "4.23.1",
+    "typescript": "5.7.3"
+  }
+}

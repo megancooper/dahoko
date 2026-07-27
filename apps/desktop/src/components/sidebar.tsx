@@ -26,6 +26,7 @@ import {
 import { LIST_COLORS, useStore } from "@/state/store";
 import { toggleTagFilter, type Filter } from "@/state/filters";
 import { SettingsDialog } from "@/components/settings-dialog";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 
 interface SidebarProps {
   filter: Filter;
@@ -120,6 +121,11 @@ export function Sidebar({ filter, onFilterChange }: SidebarProps) {
 
   return (
     <aside className="flex w-[232px] flex-shrink-0 flex-col border-r border-border bg-muted/50 p-3">
+      <div className="mb-3">
+        <WorkspaceSwitcher
+          onWorkspaceChange={() => onFilterChange({ kind: "inbox" })}
+        />
+      </div>
       <nav className="space-y-0.5">
         <NavItem
           active={filter.kind === "inbox"}
