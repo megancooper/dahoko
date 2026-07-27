@@ -1,6 +1,13 @@
 import type { List, Status, Task } from "@dahoko/core";
 import { DEFAULT_STATUSES } from "@dahoko/core";
-import type { Completion, NewTask, Repo, Subtask, TaskPatch } from "./repo";
+import type {
+  Completion,
+  NewTask,
+  Repo,
+  RepoSnapshot,
+  Subtask,
+  TaskPatch,
+} from "./repo";
 import { newId, nowIso } from "./repo";
 
 function isoDate(offsetDays: number): string {
@@ -289,5 +296,15 @@ export class MemoryRepo implements Repo {
     };
     this.completions.push(completion);
     return { ...completion };
+  }
+
+  async replaceData(data: RepoSnapshot): Promise<void> {
+    this.tasks = data.tasks.map((task) => ({ ...task, tags: [...task.tags] }));
+    this.lists = data.lists.map((list) => ({ ...list }));
+    this.statuses = data.statuses.map((status) => ({ ...status }));
+    this.subtasks = data.subtasks.map((subtask) => ({ ...subtask }));
+    this.completions = data.completions.map((completion) => ({
+      ...completion,
+    }));
   }
 }

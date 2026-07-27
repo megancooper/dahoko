@@ -18,6 +18,10 @@ import {
   type Subtask,
   type TaskPatch,
 } from "@/db";
+import {
+  createBackup,
+  type DahokoBackup,
+} from "@/db/backup";
 
 interface StoreValue {
   ready: boolean;
@@ -47,6 +51,8 @@ interface StoreValue {
     patch: { title?: string; done?: boolean },
   ) => Promise<void>;
   deleteSubtask: (id: string) => Promise<void>;
+  createDataBackup: () => DahokoBackup;
+  restoreDataBackup: (backup: DahokoBackup) => Promise<void>;
   repo: () => Promise<Repo>;
 }
 
@@ -180,7 +186,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     async (id: string, statusId: string) => {
       const status = statuses.find((s) => s.id === statusId);
       const task = tasks.find((t) => t.id === id);
-      if (!status || !task) return;
+      if (!status || !task || task.statusId === statusId) return;
       const r = await repo();
       const patch: TaskPatch = { statusId };
       if (status.isDone && !task.completedAt) {
@@ -188,8 +194,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } else if (!status.isDone && task.completedAt) {
         patch.completedAt = null;
       }
-      await r.updateTask(id, patch);
-      await refresh();
+      // Move first in memory so the card lands immediately. The database
+      // refresh confirms the result; failures revert to persisted state.
+      setTasks((current) =>
+        current.map((candidate) =>
+          candidate.id === id
+            ? {
+                ...candidate,
+                ...patch,
+                updatedAt: new Date().toISOString(),
+              }
+            : candidate,
+        ),
+      );
+      try {
+        await r.updateTask(id, patch);
+        await refresh();
+      } catch (error) {
+        await refresh();
+        throw error;
+      }
     },
     [tasks, statuses, repo, refresh],
   );
@@ -255,6 +279,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return [...set].sort();
   }, [tasks]);
 
+  const createDataBackup = useCallback(
+    () =>
+      createBackup({
+        tasks,
+        lists,
+        statuses,
+        subtasks,
+        completions,
+      }),
+    [tasks, lists, statuses, subtasks, completions],
+  );
+
+  const restoreDataBackup = useCallback(
+    async (backup: DahokoBackup) => {
+      const r = await repo();
+      await r.replaceData(backup.data);
+      await refresh();
+    },
+    [repo, refresh],
+  );
+
   const value = useMemo(
     () => ({
       ready,
@@ -275,6 +320,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addSubtask,
       updateSubtask,
       deleteSubtask,
+      createDataBackup,
+      restoreDataBackup,
       repo,
     }),
     [
@@ -296,6 +343,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addSubtask,
       updateSubtask,
       deleteSubtask,
+      createDataBackup,
+      restoreDataBackup,
       repo,
     ],
   );

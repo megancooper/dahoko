@@ -1,6 +1,14 @@
 import Database from "@tauri-apps/plugin-sql";
+import { invoke } from "@tauri-apps/api/core";
 import type { List, Priority, Recurrence, Status, Task } from "@dahoko/core";
-import type { Completion, NewTask, Repo, Subtask, TaskPatch } from "./repo";
+import type {
+  Completion,
+  NewTask,
+  Repo,
+  RepoSnapshot,
+  Subtask,
+  TaskPatch,
+} from "./repo";
 import { newId, nowIso } from "./repo";
 
 interface TaskRow {
@@ -325,5 +333,9 @@ export class SqliteRepo implements Repo {
       [id, taskId, dueDate, now],
     );
     return { id, taskId, dueDate, completedAt: now };
+  }
+
+  async replaceData(data: RepoSnapshot): Promise<void> {
+    await invoke("replace_all_data", { data });
   }
 }

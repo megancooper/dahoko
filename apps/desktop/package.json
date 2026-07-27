@@ -16,8 +16,12 @@
   "dependencies": {
     "@dahoko/core": "workspace:*",
     "@dahoko/ui": "workspace:*",
+    "@dnd-kit/collision": "^0.5.0",
+    "@dnd-kit/react": "^0.5.0",
     "@tanstack/react-router": "1.120.0",
     "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/plugin-dialog": "^2.7.2",
+    "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-process": "^2",
     "@tauri-apps/plugin-sql": "^2.3.0",
     "@tauri-apps/plugin-updater": "^2",

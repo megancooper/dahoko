@@ -1,6 +1,13 @@
 import type { Repo } from "./repo";
 
-export type { Completion, NewTask, Repo, Subtask, TaskPatch } from "./repo";
+export type {
+  Completion,
+  NewTask,
+  Repo,
+  RepoSnapshot,
+  Subtask,
+  TaskPatch,
+} from "./repo";
 
 export function isTauri(): boolean {
   return "__TAURI_INTERNALS__" in window;

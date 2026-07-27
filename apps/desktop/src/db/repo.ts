@@ -17,6 +17,14 @@ export interface Completion {
   completedAt: string;
 }
 
+export interface RepoSnapshot {
+  tasks: Task[];
+  lists: List[];
+  statuses: Status[];
+  subtasks: Subtask[];
+  completions: Completion[];
+}
+
 export interface NewTask {
   title: string;
   notes?: string;
@@ -62,6 +70,8 @@ export interface Repo {
   deleteSubtask(id: string): Promise<void>;
   listCompletions(): Promise<Completion[]>;
   addCompletion(taskId: string, dueDate: string): Promise<Completion>;
+  /** Replaces every user-owned record after the caller validates a backup. */
+  replaceData(data: RepoSnapshot): Promise<void>;
 }
 
 export function newId(): string {

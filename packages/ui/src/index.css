@@ -246,11 +246,45 @@
     opacity: 0;
   }
 
+  /* Avoid backdrop-filter here: a live full-window blur is expensive in
+     WebViews and can stall desktop rendering while a dialog is open. */
+  .dialog-overlay {
+    background: rgb(var(--background) / 0.76);
+    opacity: 1;
+    transition: opacity 160ms var(--ease-out-strong);
+  }
+
+  .dialog-overlay[data-state="closed"] {
+    opacity: 0;
+  }
+
+  .dialog-panel {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    transition:
+      opacity 180ms var(--ease-out-strong),
+      transform 180ms var(--ease-out-strong);
+  }
+
+  .dialog-panel[data-state="closed"] {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.98);
+  }
+
   @starting-style {
     .tooltip-panel[data-state="delayed-open"],
     .tooltip-panel[data-state="instant-open"] {
       transform: scale(0.95);
       opacity: 0;
+    }
+
+    .dialog-overlay[data-state="open"] {
+      opacity: 0;
+    }
+
+    .dialog-panel[data-state="open"] {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.98);
     }
   }
 
@@ -262,6 +296,12 @@
 
     .tooltip-panel[data-state="closed"] {
       transform: none;
+    }
+
+    .dialog-panel,
+    .dialog-panel[data-state="closed"] {
+      transform: translate(-50%, -50%);
+      transition-property: opacity;
     }
 
     .btn-tactile,

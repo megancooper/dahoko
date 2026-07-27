@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { Button, SegmentedControl } from "@dahoko/ui";
+import { Button, SegmentedControl, cn } from "@dahoko/ui";
 import { useStore } from "@/state/store";
 import { useSettings } from "@/state/settings";
 import { applyFilter, filterTitle, type Filter } from "@/state/filters";
@@ -94,7 +94,12 @@ function HomePage() {
 
         <QuickAdd ref={quickAddRef} filter={filter} />
 
-        <div className="min-h-0 flex-1 overflow-auto px-2">
+        <div
+          className={cn(
+            "min-h-0 flex-1 px-2",
+            view === "board" ? "overflow-hidden" : "overflow-auto",
+          )}
+        >
           {filter.kind === "recurring" ? <RecurringMetrics /> : null}
           {view === "list" ? (
             <ListView

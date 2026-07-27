@@ -1,5 +1,5 @@
-import { type ReactNode } from "react";
-import { Eye, LayoutGrid, Moon } from "lucide-react";
+import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { Download, Eye, LayoutGrid, Moon, Upload } from "lucide-react";
 import {
   Button,
   Dialog,
@@ -21,6 +21,20 @@ import {
   type ThemePreference,
 } from "@/state/settings";
 import { useUpdater } from "@/state/updater";
+import { useStore } from "@/state/store";
+import {
+  BackupValidationError,
+  MAX_BACKUP_BYTES,
+  parseBackupJson,
+  serializeBackup,
+  type DahokoBackup,
+} from "@/db/backup";
+import { isTauri } from "@/db";
+
+type DataMessage = {
+  tone: "neutral" | "success" | "error";
+  text: string;
+} | null;
 
 function SettingRow({
   icon,
@@ -68,6 +82,11 @@ export function SettingsDialog({
     checkForUpdates,
     installUpdate,
   } = useUpdater();
+  const { createDataBackup, restoreDataBackup } = useStore();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingBackup, setPendingBackup] = useState<DahokoBackup | null>(null);
+  const [dataBusy, setDataBusy] = useState(false);
+  const [dataMessage, setDataMessage] = useState<DataMessage>(null);
   const iconClass = "h-3.5 w-3.5 flex-shrink-0 text-muted-foreground";
   const busy =
     status === "checking" ||
@@ -75,9 +94,122 @@ export function SettingsDialog({
     status === "restarting";
   const updaterUnavailable = status === "unavailable";
 
+  const exportData = async () => {
+    setDataBusy(true);
+    try {
+      const backup = createDataBackup();
+      const contents = serializeBackup(backup);
+      const filename = `dahoko-backup-${backup.exportedAt.slice(0, 10)}.json`;
+
+      if (isTauri()) {
+        const [{ save }, { writeTextFile }] = await Promise.all([
+          import("@tauri-apps/plugin-dialog"),
+          import("@tauri-apps/plugin-fs"),
+        ]);
+        const path = await save({
+          defaultPath: filename,
+          filters: [{ name: "JSON backup", extensions: ["json"] }],
+        });
+        if (!path) {
+          setDataMessage({ tone: "neutral", text: "Export canceled." });
+          return;
+        }
+        await writeTextFile(path, contents);
+      } else {
+        const blob = new Blob([contents], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        link.hidden = true;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      }
+
+      setDataMessage({
+        tone: "success",
+        text: "Backup exported. Keep it somewhere secure.",
+      });
+    } catch {
+      setDataMessage({
+        tone: "error",
+        text: "The backup could not be exported.",
+      });
+    } finally {
+      setDataBusy(false);
+    }
+  };
+
+  const selectImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setPendingBackup(null);
+    setDataMessage(null);
+    if (file.size > MAX_BACKUP_BYTES) {
+      setDataMessage({
+        tone: "error",
+        text: "That backup is larger than the 10 MB import limit.",
+      });
+      return;
+    }
+
+    setDataBusy(true);
+    try {
+      const backup = parseBackupJson(await file.text());
+      setPendingBackup(backup);
+      setDataMessage({
+        tone: "neutral",
+        text: "Backup validated. Review the counts before replacing your current data.",
+      });
+    } catch (error) {
+      setDataMessage({
+        tone: "error",
+        text:
+          error instanceof BackupValidationError
+            ? error.message
+            : "That file could not be read as a dahoko backup.",
+      });
+    } finally {
+      setDataBusy(false);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!pendingBackup) return;
+    const taskCount = pendingBackup.data.tasks.length;
+    setDataBusy(true);
+    try {
+      await restoreDataBackup(pendingBackup);
+      setPendingBackup(null);
+      setDataMessage({
+        tone: "success",
+        text: `Imported ${taskCount} ${taskCount === 1 ? "task" : "tasks"} successfully.`,
+      });
+    } catch {
+      setDataMessage({
+        tone: "error",
+        text: "Import failed safely. Your current data was not changed.",
+      });
+    } finally {
+      setDataBusy(false);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[420px]">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setPendingBackup(null);
+        onOpenChange(nextOpen);
+      }}
+    >
+      <DialogContent className="max-h-[calc(100dvh-3rem)] max-w-[480px] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
@@ -218,6 +350,107 @@ export function SettingsDialog({
                   style={{ width: `${progress ?? 12}%` }}
                 />
               </div>
+            ) : null}
+          </section>
+
+          <section
+            aria-labelledby="data-title"
+            className="rounded-lg border border-border bg-muted/35 p-3"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 id="data-title" className="text-[13px] font-medium">
+                  Your data
+                </h3>
+                <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+                  Export a portable JSON backup or replace local data from a
+                  backup you trust.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={dataBusy}
+                onClick={exportData}
+              >
+                <Download aria-hidden="true" className="h-3.5 w-3.5" />
+                Export data
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={dataBusy}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload aria-hidden="true" className="h-3.5 w-3.5" />
+                {dataBusy ? "Reading…" : "Import data"}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={(event) => void selectImport(event)}
+                className="sr-only"
+              />
+            </div>
+
+            {pendingBackup ? (
+              <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3">
+                <p className="text-[12px] font-medium">
+                  Replace all current data?
+                </p>
+                <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+                  Valid backup from{" "}
+                  {new Date(pendingBackup.exportedAt).toLocaleString()} with{" "}
+                  {pendingBackup.data.tasks.length} tasks,{" "}
+                  {pendingBackup.data.lists.length} lists, and{" "}
+                  {pendingBackup.data.subtasks.length} subtasks. This cannot be
+                  undone unless you export your current data first.
+                </p>
+                <div className="mt-3 flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={dataBusy}
+                    onClick={() => {
+                      setPendingBackup(null);
+                      setDataMessage(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructiveOutline"
+                    disabled={dataBusy}
+                    onClick={() => void confirmImport()}
+                  >
+                    {dataBusy ? "Importing…" : "Replace data"}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {dataMessage ? (
+              <p
+                role={dataMessage.tone === "error" ? "alert" : "status"}
+                className={
+                  dataMessage.tone === "error"
+                    ? "mt-3 text-[11.5px] text-destructive"
+                    : dataMessage.tone === "success"
+                      ? "mt-3 text-[11.5px] text-success"
+                      : "mt-3 text-[11.5px] text-muted-foreground"
+                }
+              >
+                {dataMessage.text}
+              </p>
             ) : null}
           </section>
         </div>

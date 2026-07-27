@@ -6,6 +6,8 @@
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
+    "dialog:allow-save",
+    "fs:allow-write-text-file",
     "sql:default",
     "sql:allow-execute",
     "updater:default",
