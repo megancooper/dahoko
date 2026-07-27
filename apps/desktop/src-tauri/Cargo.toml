@@ -1,6 +1,6 @@
 [package]
 name = "dahoko"
-version = "0.1.0"
+version = "0.1.1"
 description = "An open-source task manager"
 authors = ["dahoko contributors"]
 license = "MIT"
