@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -71,5 +71,25 @@ test("rejects versions that are not exact stable SemVer", async (t) => {
         stdio: "pipe",
       }),
     /Command failed/,
+  );
+});
+
+test("supports Cargo lockfiles checked out with Windows line endings", async (t) => {
+  const fixture = await createFixture();
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+
+  const cargoLockPath = path.join(fixture, versionFiles[2]);
+  const cargoLock = await readFile(cargoLockPath, "utf8");
+  await writeFile(cargoLockPath, cargoLock.replace(/\n/g, "\r\n"));
+
+  execFileSync(process.execPath, [versionScript], {
+    cwd: fixture,
+    env: { ...process.env, RELEASE_VERSION: "3.4.5" },
+  });
+
+  const updatedCargoLock = await readFile(cargoLockPath, "utf8");
+  assert.match(
+    updatedCargoLock,
+    /\[\[package\]\]\r\nname = "dahoko"\r\nversion = "3\.4\.5"/,
   );
 });
