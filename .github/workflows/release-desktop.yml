@@ -1,29 +1,47 @@
 name: Publish desktop
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: Exact SemVer to build from its app-v tag
+        required: true
+        type: string
   workflow_dispatch:
-  push:
-    tags:
-      - "app-v*"
+    inputs:
+      version:
+        description: Exact SemVer whose app-v tag should be published
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 concurrency:
-  group: desktop-release-${{ github.ref }}
+  group: desktop-release-${{ inputs.version }}
   cancel-in-progress: false
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: app-v${{ inputs.version }}
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
         with:
           version: 8.15.6
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 22
+          node-version: 22.22.2
           cache: pnpm
+
+      - name: Synchronize release version
+        run: node scripts/set-version.mjs "$RELEASE_VERSION"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -78,23 +96,27 @@ jobs:
             rust-targets: ""
 
     runs-on: ${{ matrix.platform }}
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: app-v${{ inputs.version }}
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
         with:
           version: 8.15.6
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 22
+          node-version: 22.22.2
           cache: pnpm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           targets: ${{ matrix.rust-targets }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           workspaces: apps/desktop/src-tauri
 
@@ -108,10 +130,13 @@ jobs:
             librsvg2-dev \
             patchelf
 
+      - name: Synchronize release version
+        run: node scripts/set-version.mjs "$RELEASE_VERSION"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - uses: tauri-apps/tauri-action@v1
+      - uses: tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
