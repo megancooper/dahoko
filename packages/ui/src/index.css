@@ -1,0 +1,305 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans:
+      "IBM Plex Sans", Inter, InterVariable, system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono:
+      "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas,
+      monospace;
+    --font-brand: "IBM Plex Sans", Inter, InterVariable, system-ui, sans-serif;
+    /* Palette: pastel blue #A3D0FF is the brand color, pastel peach #FFD3A3
+       its complement. Neither pastel can carry text contrast, so each gets a
+       "depth" partner (deep navy / deep amber) for text, borders, and
+       shadows; interactive fills are pastel with dark text. Neutrals are
+       blue-tinged, states lean cool (success teal-green, warning gold,
+       danger warm red) so they sit with the blue without reading as brand. */
+    --surface: 255 255 255;
+    --surface-subtle: 244 249 254;
+    --text-primary: 24 34 46;
+    --text-secondary: 90 108 126;
+    --text-muted: 128 143 160;
+    --border-subtle: 213 227 240;
+    --border-strong: 23 69 111;
+    --brand-primary: 163 208 255;
+    --brand-primary-hover: 140 193 250;
+    --brand-primary-active: 118 179 244;
+    /* Accessible blue for roles the pastel can't carry on light surfaces:
+       link/icon text, active borders, checkbox accents (≥3:1 on white). */
+    --brand-primary-strong: 37 99 168;
+    --brand-primary-depth: 23 69 111;
+    --brand-secondary: 255 211 163;
+    --brand-secondary-depth: 240 183 120;
+    --focus-ring: 59 130 200;
+    --attention: 178 121 26;
+    --attention-foreground: 30 22 6;
+    --background: 255 255 255;
+    --foreground: 24 34 46;
+    --card: 255 255 255;
+    --card-foreground: 24 34 46;
+    --popover: 255 255 255;
+    --popover-foreground: 24 34 46;
+    --primary: 163 208 255;
+    --primary-foreground: 16 42 66;
+    --secondary: 234 244 255;
+    --secondary-foreground: 23 69 111;
+    --muted: 240 246 252;
+    --muted-foreground: 90 108 126;
+    --accent: 234 244 255;
+    --accent-foreground: 23 69 111;
+    --destructive: 192 57 43;
+    --destructive-foreground: 255 250 249;
+    --border: 213 227 240;
+    --input: 128 143 160;
+    --ring: 59 130 200;
+    --success: 42 122 92;
+    --success-foreground: 255 255 255;
+    --warning: 178 121 26;
+    --warning-foreground: 30 22 6;
+    --table-header: 244 249 254;
+    --radius: 0.8rem;
+    --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .dark {
+    color-scheme: dark;
+    /* Blue-slate dark theme: the same pastels read as accents on deep navy
+       surfaces. --brand-primary-depth flips light because it doubles as a
+       text color on brand tints throughout the app. */
+    --surface: 14 22 33;
+    --surface-subtle: 21 32 46;
+    --text-primary: 232 240 250;
+    --text-secondary: 177 194 212;
+    --text-muted: 136 154 174;
+    --border-subtle: 44 61 83;
+    --border-strong: 201 227 252;
+    --brand-primary: 163 208 255;
+    --brand-primary-hover: 186 221 255;
+    --brand-primary-active: 140 193 250;
+    --brand-primary-strong: 143 195 247;
+    --brand-primary-depth: 201 227 252;
+    --brand-secondary: 58 45 30;
+    --brand-secondary-depth: 138 104 62;
+    --focus-ring: 143 195 247;
+    --attention: 226 178 90;
+    --attention-foreground: 30 22 6;
+    --background: 14 22 33;
+    --foreground: 232 240 250;
+    --card: 21 32 46;
+    --card-foreground: 232 240 250;
+    --popover: 21 32 46;
+    --popover-foreground: 232 240 250;
+    --primary: 163 208 255;
+    --primary-foreground: 16 33 52;
+    --secondary: 27 41 58;
+    --secondary-foreground: 232 240 250;
+    --muted: 27 41 58;
+    --muted-foreground: 177 194 212;
+    --accent: 32 48 68;
+    --accent-foreground: 232 240 250;
+    --destructive: 240 128 118;
+    --destructive-foreground: 59 14 10;
+    --border: 44 61 83;
+    --input: 136 154 174;
+    --ring: 143 195 247;
+    --success: 126 200 168;
+    --success-foreground: 15 42 31;
+    --warning: 226 178 90;
+    --warning-foreground: 30 22 6;
+    --table-header: 27 41 58;
+  }
+
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    font-feature-settings: "kern";
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-variant-ligatures: no-contextual;
+    overflow-anchor: none;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+@layer components {
+  /* Buttons cast a soft graduated shadow underneath (a gentle resting
+     elevation) instead of the old hard-offset 3D press. Hover lifts the
+     button 1px and deepens the shadow; active settles it flat. */
+  .btn-tactile {
+    --button-border: var(--brand-primary-depth);
+    --button-depth: var(--brand-primary-depth);
+    min-height: 2.75rem;
+    border: 1px solid rgb(var(--button-border) / 0.32);
+    box-shadow:
+      0 1px 2px rgb(var(--button-depth) / 0.14),
+      0 3px 10px -2px rgb(var(--button-depth) / 0.24);
+    transform: translateY(0);
+    transition:
+      transform 120ms ease,
+      box-shadow 120ms ease,
+      background-color 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease;
+  }
+
+  .btn-tactile-primary {
+    --button-border: var(--brand-primary-depth);
+    --button-depth: var(--brand-primary-depth);
+    background: rgb(var(--brand-primary));
+    color: rgb(var(--primary-foreground));
+  }
+
+  .btn-tactile-secondary {
+    --button-border: var(--brand-primary-depth);
+    --button-depth: var(--brand-primary-depth);
+    background: rgb(var(--surface));
+    color: rgb(var(--brand-primary-depth));
+  }
+
+  .btn-tactile-danger {
+    --button-border: var(--destructive);
+    --button-depth: var(--destructive);
+    background: rgb(var(--surface));
+    color: rgb(var(--destructive));
+  }
+
+  .btn-tactile:focus-visible {
+    outline: 2px solid rgb(var(--focus-ring));
+    outline-offset: 4px;
+  }
+
+  .btn-tactile:disabled,
+  .btn-tactile[aria-disabled="true"] {
+    box-shadow: 0 1px 2px rgb(var(--button-depth) / 0.1);
+    transform: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .btn-tactile:hover:not(:disabled):not([aria-disabled="true"]) {
+      transform: translateY(-1px);
+      box-shadow:
+        0 2px 4px rgb(var(--button-depth) / 0.16),
+        0 7px 18px -6px rgb(var(--button-depth) / 0.32);
+    }
+
+    .btn-tactile-primary:hover:not(:disabled):not([aria-disabled="true"]) {
+      background: rgb(var(--brand-primary-hover));
+    }
+
+    .btn-tactile-secondary:hover:not(:disabled):not([aria-disabled="true"]) {
+      background: rgb(var(--secondary));
+    }
+
+    .btn-tactile-danger:hover:not(:disabled):not([aria-disabled="true"]) {
+      background: rgb(var(--destructive) / 0.12);
+    }
+  }
+
+  .btn-tactile:active:not(:disabled):not([aria-disabled="true"]) {
+    transform: translateY(0);
+    box-shadow:
+      0 1px 2px rgb(var(--button-depth) / 0.14),
+      0 2px 6px -2px rgb(var(--button-depth) / 0.2);
+  }
+
+  .tooltip-panel {
+    transform: scale(1);
+    transform-origin: var(--radix-tooltip-content-transform-origin);
+    opacity: 1;
+    transition:
+      opacity 150ms var(--ease-out-strong),
+      transform 150ms var(--ease-out-strong);
+  }
+
+  .tooltip-panel[data-state="closed"] {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+
+  @starting-style {
+    .tooltip-panel[data-state="delayed-open"],
+    .tooltip-panel[data-state="instant-open"] {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tooltip-panel {
+      transform: none;
+      transition-property: opacity;
+    }
+
+    .tooltip-panel[data-state="closed"] {
+      transform: none;
+    }
+
+    .btn-tactile,
+    .btn-tactile:hover:not(:disabled):not([aria-disabled="true"]),
+    .btn-tactile:active:not(:disabled):not([aria-disabled="true"]) {
+      transform: none;
+      transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        color 120ms ease,
+        box-shadow 120ms ease;
+    }
+
+    .btn-tactile:active:not(:disabled):not([aria-disabled="true"]) {
+      box-shadow:
+        0 1px 2px rgb(var(--button-depth) / 0.14),
+        0 2px 6px -2px rgb(var(--button-depth) / 0.2);
+    }
+  }
+}
+
+@layer utilities {
+  .ease-out-strong {
+    transition-timing-function: var(--ease-out-strong);
+  }
+
+  .ease-in-out-strong {
+    transition-timing-function: var(--ease-in-out-strong);
+  }
+
+  .panel-border {
+    @apply border border-border/80 bg-card shadow-soft;
+  }
+
+  .metric-grid {
+    background-image:
+      linear-gradient(rgb(var(--border) / 0.42) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--border) / 0.42) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+}

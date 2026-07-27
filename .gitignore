@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.turbo/
+*.log
+
+# Tauri / Rust
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
+# local env
+.env
+.env.local
+
+# OS
+.DS_Store

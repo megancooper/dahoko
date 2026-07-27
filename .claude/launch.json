@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "desktop",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@dahoko/desktop", "dev"],
+      "port": 5103
+    },
+    {
+      "name": "www",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@dahoko/www", "dev"],
+      "port": 5102
+    }
+  ]
+}

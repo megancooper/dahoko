@@ -1,0 +1,20 @@
+/* Desktop-app-specific styles. Design tokens come from @dahoko/ui/index.css. */
+
+html,
+body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+/* Native-feeling: no text selection on chrome, but allow it in fields */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+}

@@ -1,0 +1,11 @@
+{
+  "extends": "@dahoko/typescript-config/react.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "types": ["vite/client", "vitest/globals"]
+  },
+  "include": ["src", "vite.config.ts", "tailwind.config.ts"]
+}

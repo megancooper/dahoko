@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#A3D0FF" />
+    <title>dahoko</title>
+    <script>
+      // Apply the saved (or system) theme before first paint so dark-mode
+      // users never flash light. Kept in sync with the ThemeToggle
+      // component's "dahoko.theme" localStorage key.
+      (function () {
+        try {
+          var stored = localStorage.getItem("dahoko.theme");
+          var dark =
+            stored === "dark" ||
+            (stored !== "light" &&
+              matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (error) {
+          /* theme falls back to light */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

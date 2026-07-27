@@ -1,0 +1,10 @@
+{
+  "extends": "@dahoko/typescript-config/react.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@ui/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "tailwind.preset.ts"]
+}

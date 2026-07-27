@@ -1,0 +1,7 @@
+{
+  "extends": "@dahoko/typescript-config/react.json",
+  "compilerOptions": {
+    "types": ["vitest/globals"]
+  },
+  "include": ["src"]
+}

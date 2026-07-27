@@ -1,0 +1,28 @@
+{
+  "name": "dahoko",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev --filter=@dahoko/desktop --filter=@dahoko/www",
+    "dev:desktop": "turbo run dev --filter=@dahoko/desktop",
+    "dev:www": "turbo run dev --filter=@dahoko/www",
+    "tauri": "pnpm --filter @dahoko/desktop tauri",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "verify": "pnpm lint && pnpm test && pnpm typecheck && pnpm build",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "2.5.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@tanstack/router-generator": "1.120.0"
+    }
+  },
+  "packageManager": "pnpm@8.15.6",
+  "engines": {
+    "node": ">=22"
+  }
+}

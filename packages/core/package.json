@@ -1,0 +1,20 @@
+{
+  "name": "@dahoko/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "node -e \"process.exit(0)\"",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@dahoko/typescript-config": "workspace:*",
+    "typescript": "5.7.3",
+    "vitest": "2.1.8"
+  }
+}

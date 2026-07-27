@@ -1,0 +1,41 @@
+{
+  "name": "@dahoko/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc -b --noEmit",
+    "tauri": "tauri",
+    "test": "vitest run",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "clean": "rm -rf dist",
+    "lint": "node -e \"process.exit(0)\""
+  },
+  "dependencies": {
+    "@dahoko/core": "workspace:*",
+    "@dahoko/ui": "workspace:*",
+    "@tanstack/react-router": "1.120.0",
+    "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/plugin-sql": "^2.3.0",
+    "lucide-react": "0.468.0",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@dahoko/typescript-config": "workspace:*",
+    "@tanstack/router-plugin": "1.120.0",
+    "@tauri-apps/cli": "^2.9.0",
+    "@types/react": "19.0.0",
+    "@types/react-dom": "19.0.0",
+    "@vitejs/plugin-react": "4.3.0",
+    "autoprefixer": "10.4.20",
+    "postcss": "8.4.49",
+    "tailwindcss": "3.4.16",
+    "tailwindcss-animate": "1.0.7",
+    "typescript": "5.7.3",
+    "vite": "6.0.0",
+    "vitest": "2.1.8"
+  }
+}
