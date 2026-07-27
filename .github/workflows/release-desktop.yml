@@ -22,6 +22,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.release.outputs.id }}
+      release_body: ${{ steps.release.outputs.body }}
+    steps:
+      - name: Resolve existing semantic release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Version must be an exact stable SemVer such as 1.2.3."
+            exit 1
+          fi
+
+          release_endpoint="repos/${GITHUB_REPOSITORY}/releases/tags/app-v${RELEASE_VERSION}"
+          release_id="$(gh api "$release_endpoint" --jq ".id")"
+          delimiter="release_body_$(openssl rand -hex 16)"
+
+          {
+            echo "id=$release_id"
+            echo "body<<$delimiter"
+            gh api "$release_endpoint" --jq ".body"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+
   verify:
     runs-on: ubuntu-latest
     env:
@@ -74,6 +104,7 @@ jobs:
 
   publish:
     needs:
+      - resolve-release
       - verify
       - validate-signing
     permissions:
@@ -144,8 +175,9 @@ jobs:
           TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         with:
           projectPath: apps/desktop
+          releaseId: ${{ needs.resolve-release.outputs.release_id }}
           tagName: app-v__VERSION__
-          # Semantic release owns the existing release title and changelog.
+          releaseBody: ${{ needs.resolve-release.outputs.release_body }}
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
