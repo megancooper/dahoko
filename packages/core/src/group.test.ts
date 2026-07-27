@@ -17,6 +17,7 @@ function task(overrides: Partial<Task>): Task {
     listId: null,
     statusId: "backlog",
     tags: [],
+    recurrence: null,
     completedAt: null,
     sortOrder: n,
     createdAt: "2026-07-01T00:00:00Z",

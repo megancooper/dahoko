@@ -29,6 +29,31 @@ pnpm dev:www
 The desktop frontend also runs in a plain browser (`pnpm --filter @dahoko/desktop dev`)
 with an in-memory database — handy for UI work without a Rust build.
 
+## Desktop updates
+
+Signed desktop releases check
+`https://github.com/megancooper/dahoko/releases/latest/download/latest.json` on
+startup. Users can also check manually and install the update from Settings;
+the app shows download progress and relaunches after installation.
+
+Tauri requires every updater artifact to be signed. Generate the updater key
+pair once and keep the private key somewhere durable and private:
+
+```bash
+pnpm tauri signer generate -w ~/.tauri/dahoko.key
+```
+
+Add these GitHub Actions secrets before publishing an `app-v*` tag:
+
+- `TAURI_SIGNING_PRIVATE_KEY` — the private key contents
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — its password, if one was set
+- `TAURI_UPDATER_PUBKEY` — the contents of `~/.tauri/dahoko.key.pub`
+
+The release workflow verifies the workspace, builds signed updater artifacts,
+and lets Tauri Action publish them, including `latest.json`, to a GitHub
+release. To use another update service, change the updater endpoint in
+`apps/desktop/src-tauri/tauri.conf.json`.
+
 ## Views
 
 Tasks live in one SQLite database and can be viewed as:

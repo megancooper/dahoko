@@ -9,13 +9,25 @@ import {
   type ReactNode,
 } from "react";
 import type { List, Status, Task } from "@dahoko/core";
-import { getRepo, type NewTask, type Repo, type TaskPatch } from "@/db";
+import { nextOccurrence } from "@dahoko/core";
+import {
+  getRepo,
+  type Completion,
+  type NewTask,
+  type Repo,
+  type Subtask,
+  type TaskPatch,
+} from "@/db";
 
 interface StoreValue {
   ready: boolean;
   tasks: Task[];
   lists: List[];
   statuses: Status[];
+  /** All subtasks across tasks; filter by taskId */
+  subtasks: Subtask[];
+  /** Completion history of recurring tasks */
+  completions: Completion[];
   /** All tags currently in use, sorted */
   tags: string[];
   addTask: (input: NewTask) => Promise<void>;
@@ -24,18 +36,42 @@ interface StoreValue {
   toggleComplete: (id: string) => Promise<void>;
   moveToStatus: (id: string, statusId: string) => Promise<void>;
   addList: (name: string) => Promise<void>;
+  updateList: (
+    id: string,
+    patch: { name?: string; color?: string },
+  ) => Promise<void>;
+  deleteList: (id: string) => Promise<void>;
+  addSubtask: (taskId: string, title: string) => Promise<void>;
+  updateSubtask: (
+    id: string,
+    patch: { title?: string; done?: boolean },
+  ) => Promise<void>;
+  deleteSubtask: (id: string) => Promise<void>;
   repo: () => Promise<Repo>;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
 
-const LIST_COLORS = ["#A3D0FF", "#FFD3A3", "#7EC8A8", "#E2B25A", "#C9E3FC"];
+export const LIST_COLORS = [
+  "#A3D0FF", // blue
+  "#FFD3A3", // peach
+  "#7EC8A8", // green
+  "#E2B25A", // gold
+  "#C9E3FC", // sky
+  "#F2B8C6", // pink
+  "#C7B9F2", // lavender
+  "#F2A0A0", // coral
+  "#8FD8D2", // teal
+  "#B0B8C4", // slate
+];
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [lists, setLists] = useState<List[]>([]);
   const [statuses, setStatuses] = useState<Status[]>([]);
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [completions, setCompletions] = useState<Completion[]>([]);
   const repoRef = useRef<Repo | null>(null);
 
   const repo = useCallback(async () => {
@@ -45,14 +81,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     const r = await repo();
-    const [nextTasks, nextLists, nextStatuses] = await Promise.all([
-      r.listTasks(),
-      r.listLists(),
-      r.listStatuses(),
-    ]);
+    const [nextTasks, nextLists, nextStatuses, nextSubtasks, nextCompletions] =
+      await Promise.all([
+        r.listTasks(),
+        r.listLists(),
+        r.listStatuses(),
+        r.listAllSubtasks(),
+        r.listCompletions(),
+      ]);
     setTasks(nextTasks);
     setLists(nextLists);
     setStatuses(nextStatuses);
+    setSubtasks(nextSubtasks);
+    setCompletions(nextCompletions);
   }, [repo]);
 
   useEffect(() => {
@@ -101,6 +142,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const task = tasks.find((t) => t.id === id);
       if (!task) return;
       const r = await repo();
+      if (task.recurrence && !task.completedAt) {
+        // Recurring: log this occurrence and roll the due date forward
+        // instead of closing the task.
+        const today = new Date();
+        const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const dueDate = task.dueAt ? task.dueAt.slice(0, 10) : todayIso;
+        await r.addCompletion(task.id, dueDate);
+        const nextDate = nextOccurrence(dueDate, task.recurrence);
+        const dueAt =
+          task.dueAt && task.dueAt.length > 10
+            ? `${nextDate}${task.dueAt.slice(10)}`
+            : nextDate;
+        await r.updateTask(id, { dueAt });
+        await refresh();
+        return;
+      }
       if (task.completedAt) {
         const firstOpen = statuses.find((s) => !s.isDone);
         await r.updateTask(id, {
@@ -147,6 +204,51 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [lists.length, repo, refresh],
   );
 
+  const updateList = useCallback(
+    async (id: string, patch: { name?: string; color?: string }) => {
+      const r = await repo();
+      await r.updateList(id, patch);
+      await refresh();
+    },
+    [repo, refresh],
+  );
+
+  const deleteList = useCallback(
+    async (id: string) => {
+      const r = await repo();
+      await r.deleteList(id);
+      await refresh();
+    },
+    [repo, refresh],
+  );
+
+  const addSubtask = useCallback(
+    async (taskId: string, title: string) => {
+      const r = await repo();
+      await r.createSubtask(taskId, title);
+      await refresh();
+    },
+    [repo, refresh],
+  );
+
+  const updateSubtask = useCallback(
+    async (id: string, patch: { title?: string; done?: boolean }) => {
+      const r = await repo();
+      await r.updateSubtask(id, patch);
+      await refresh();
+    },
+    [repo, refresh],
+  );
+
+  const deleteSubtask = useCallback(
+    async (id: string) => {
+      const r = await repo();
+      await r.deleteSubtask(id);
+      await refresh();
+    },
+    [repo, refresh],
+  );
+
   const tags = useMemo(() => {
     const set = new Set<string>();
     for (const task of tasks) for (const tag of task.tags) set.add(tag);
@@ -159,6 +261,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       tasks,
       lists,
       statuses,
+      subtasks,
+      completions,
       tags,
       addTask,
       updateTask,
@@ -166,6 +270,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toggleComplete,
       moveToStatus,
       addList,
+      updateList,
+      deleteList,
+      addSubtask,
+      updateSubtask,
+      deleteSubtask,
       repo,
     }),
     [
@@ -173,6 +282,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       tasks,
       lists,
       statuses,
+      subtasks,
+      completions,
       tags,
       addTask,
       updateTask,
@@ -180,6 +291,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toggleComplete,
       moveToStatus,
       addList,
+      updateList,
+      deleteList,
+      addSubtask,
+      updateSubtask,
+      deleteSubtask,
       repo,
     ],
   );

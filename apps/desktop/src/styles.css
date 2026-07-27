@@ -18,3 +18,37 @@ textarea,
   user-select: text;
   -webkit-user-select: text;
 }
+
+/* Animated strike-through for completed task titles. The line sweeps in
+   from the left when data-done flips, instead of a hard line-through. */
+.task-strike {
+  position: relative;
+  transition: color 200ms var(--ease-out-strong);
+}
+
+.task-strike::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(50% - 0.5px);
+  height: 1px;
+  width: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 280ms var(--ease-out-strong);
+  pointer-events: none;
+}
+
+.task-strike[data-done="true"]::after {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -3,7 +3,13 @@ import type { Task } from "@dahoko/core";
 import { groupByStatus } from "@dahoko/core";
 import { cn } from "@dahoko/ui";
 import { useStore } from "@/state/store";
-import { DueLabel, PriorityFlag, TagChip } from "../task-chips";
+import {
+  AgeBars,
+  DueLabel,
+  RecurrenceChip,
+  SubtaskProgress,
+  TagChip,
+} from "../task-chips";
 
 function BoardCard({
   task,
@@ -16,6 +22,8 @@ function BoardCard({
   onSelect: (id: string) => void;
   onDragStart: (id: string) => void;
 }) {
+  const { subtasks } = useStore();
+  const mine = subtasks.filter((s) => s.taskId === task.id);
   return (
     <div
       role="button"
@@ -30,21 +38,24 @@ function BoardCard({
         if (event.key === "Enter") onSelect(task.id);
       }}
       className={cn(
-        "mb-2 cursor-grab rounded-md border border-border bg-card px-3 py-2.5 shadow-soft transition-shadow hover:shadow-md active:cursor-grabbing",
+        "mb-2 animate-fade-in-up cursor-grab rounded-md border border-border bg-card px-3 py-2.5 shadow-soft transition-shadow hover:shadow-md active:cursor-grabbing",
         selected && "border-primary/60 ring-1 ring-primary/40",
         task.completedAt && "opacity-60",
       )}
     >
       <div
-        className={cn(
-          "mb-1.5 text-[13px]",
-          task.completedAt && "line-through",
-        )}
+        data-done={task.completedAt !== null}
+        className="task-strike mb-1.5 w-fit max-w-full text-[13px]"
       >
         {task.title}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <PriorityFlag priority={task.priority} />
+        <RecurrenceChip task={task} />
+        <SubtaskProgress
+          done={mine.filter((s) => s.done).length}
+          total={mine.length}
+        />
+        <AgeBars task={task} />
         {task.tags.map((tag) => (
           <TagChip key={tag} tag={tag} />
         ))}
@@ -73,7 +84,9 @@ export function BoardView({
   );
 
   return (
-    <div className="flex min-w-fit items-start gap-3.5 px-5 pb-6 pt-4">
+    // px-3 inside the page's px-2 wrapper lines the columns up with the
+    // quick-add bar's 20px gutter
+    <div className="flex min-w-fit items-start gap-3.5 px-3 pb-6 pt-4">
       {statuses.map((status) => {
         const columnTasks = groups.get(status.id) ?? [];
         return (

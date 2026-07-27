@@ -42,3 +42,20 @@ export function isOverdue(dueAt: string | null, completedAt: string | null): boo
   if (!dueAt || completedAt) return false;
   return dueAt.slice(0, 10) < isoToday();
 }
+
+/** Whole days a task is past due; 0 when due today, not yet due, or completed. */
+export function overdueDays(
+  dueAt: string | null,
+  completedAt: string | null,
+): number {
+  if (!dueAt || completedAt) return 0;
+  const due = new Date(`${dueAt.slice(0, 10)}T00:00:00`);
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+  const days = Math.round((startOfToday.getTime() - due.getTime()) / 86_400_000);
+  return Math.max(0, days);
+}

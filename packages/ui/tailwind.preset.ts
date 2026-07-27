@@ -86,9 +86,30 @@ const config: Partial<Config> = {
           "0%": { opacity: "0", transform: "translateY(12px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "check-pop": {
+          "0%": { transform: "scale(0.8)" },
+          "55%": { transform: "scale(1.18)" },
+          "100%": { transform: "scale(1)" },
+        },
+        "check-in": {
+          "0%": { opacity: "0", transform: "scale(0.4) rotate(-14deg)" },
+          "100%": { opacity: "1", transform: "scale(1) rotate(0deg)" },
+        },
+        "slide-in-right": {
+          "0%": { transform: "translateX(100%)" },
+          "100%": { transform: "translateX(0)" },
+        },
+        "slide-out-right": {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(100%)" },
+        },
       },
       animation: {
         "fade-in-up": "fade-in-up 240ms var(--ease-out-strong) forwards",
+        "check-pop": "check-pop 240ms var(--ease-out-strong)",
+        "check-in": "check-in 200ms var(--ease-out-strong)",
+        "slide-in-right": "slide-in-right 260ms var(--ease-out-strong)",
+        "slide-out-right": "slide-out-right 180ms ease-in forwards",
       },
     },
   },

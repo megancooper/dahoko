@@ -13,8 +13,8 @@ export {
 } from "./components/card";
 
 export { Input } from "./components/input";
-export { Badge, badgeVariants } from "./components/badge";
-export type { BadgeProps } from "./components/badge";
+export { Badge, VersionBadge, badgeVariants } from "./components/badge";
+export type { BadgeProps, VersionBadgeProps } from "./components/badge";
 export {
   Dialog,
   DialogPortal,
@@ -44,6 +44,16 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuRadioGroup,
 } from "./components/dropdown-menu";
+export {
+  Select,
+  SelectGroup,
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+  SelectLabel,
+  SelectItem,
+  SelectSeparator,
+} from "./components/select";
 export {
   SegmentedControl,
 } from "./components/segmented-control";

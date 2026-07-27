@@ -1,6 +1,14 @@
 import { useState } from "react";
+import { Layers } from "lucide-react";
 import type { Task } from "@dahoko/core";
 import { PRIORITY_LABELS, groupByTag, type Priority } from "@dahoko/core";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@dahoko/ui";
 import { useStore } from "@/state/store";
 import { TaskRow } from "./list-view";
 
@@ -48,16 +56,23 @@ export function TagView({
   return (
     <div className="pb-6">
       <div className="flex items-center gap-2 px-3 pt-3">
-        <span className="text-xs text-muted-foreground">Group by</span>
-        <select
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Layers className="h-3.5 w-3.5" />
+          Group by
+        </span>
+        <Select
           value={groupBy}
-          onChange={(event) => setGroupBy(event.target.value as GroupBy)}
-          className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
+          onValueChange={(value) => setGroupBy(value as GroupBy)}
         >
-          <option value="tag">Tag</option>
-          <option value="list">List</option>
-          <option value="priority">Priority</option>
-        </select>
+          <SelectTrigger aria-label="Group by" className="h-7 w-auto min-w-[104px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="tag">Tag</SelectItem>
+            <SelectItem value="list">List</SelectItem>
+            <SelectItem value="priority">Priority</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       {groups.map(([label, groupTasks]) => (
         <section key={label}>

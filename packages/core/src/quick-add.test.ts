@@ -12,6 +12,7 @@ describe("parseQuickAdd", () => {
       priority: 0,
       dueDate: null,
       dueTime: null,
+      recurrence: null,
     });
   });
 
@@ -63,5 +64,52 @@ describe("parseQuickAdd", () => {
     const r = parseQuickAdd("Write monday-review notes", NOW);
     expect(r.dueDate).toBeNull();
     expect(r.title).toBe("Write monday-review notes");
+  });
+
+  it("parses 'every day' as daily anchored today", () => {
+    const r = parseQuickAdd("Morning run every day", NOW);
+    expect(r.title).toBe("Morning run");
+    expect(r.recurrence).toBe("daily");
+    expect(r.dueDate).toBe("2026-07-25");
+  });
+
+  it("parses bare cadence words", () => {
+    expect(parseQuickAdd("Journal daily", NOW).recurrence).toBe("daily");
+    expect(parseQuickAdd("Report weekly", NOW).recurrence).toBe("weekly");
+    expect(parseQuickAdd("Pay rent monthly", NOW).recurrence).toBe("monthly");
+    expect(parseQuickAdd("Standup weekdays", NOW).recurrence).toBe("weekdays");
+  });
+
+  it("anchors 'every weekday' on the next weekday from a weekend", () => {
+    // NOW is a Saturday; first occurrence is Monday
+    const r = parseQuickAdd("Standup every weekday", NOW);
+    expect(r.recurrence).toBe("weekdays");
+    expect(r.dueDate).toBe("2026-07-27");
+  });
+
+  it("parses 'every monday' as weekly anchored on Monday", () => {
+    const r = parseQuickAdd("Gym every monday", NOW);
+    expect(r.title).toBe("Gym");
+    expect(r.recurrence).toBe("weekly");
+    expect(r.dueDate).toBe("2026-07-27");
+  });
+
+  it("parses recurrence with a time", () => {
+    const r = parseQuickAdd("Morning run every day at 07:00", NOW);
+    expect(r.recurrence).toBe("daily");
+    expect(r.dueDate).toBe("2026-07-25");
+    expect(r.dueTime).toBe("07:00");
+  });
+
+  it("lets an explicit date override the recurrence anchor", () => {
+    const r = parseQuickAdd("Pay rent every month 2026-08-01", NOW);
+    expect(r.recurrence).toBe("monthly");
+    expect(r.dueDate).toBe("2026-08-01");
+  });
+
+  it("keeps cadence-like words inside the title when not standalone", () => {
+    const r = parseQuickAdd("Read the dailynews digest", NOW);
+    expect(r.recurrence).toBeNull();
+    expect(r.title).toBe("Read the dailynews digest");
   });
 });

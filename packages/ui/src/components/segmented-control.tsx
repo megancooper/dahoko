@@ -14,6 +14,8 @@ export interface SegmentedControlProps<T extends string> {
   options: SegmentedControlOption<T>[];
   className?: string;
   disabled?: boolean;
+  /** "sm" matches the 32px height of Button size="sm" */
+  size?: "default" | "sm";
   "aria-label"?: string;
 }
 
@@ -23,6 +25,7 @@ function SegmentedControl<T extends string>({
   options,
   className,
   disabled,
+  size = "default",
   "aria-label": ariaLabel,
 }: SegmentedControlProps<T>) {
   return (
@@ -30,7 +33,8 @@ function SegmentedControl<T extends string>({
       role="radiogroup"
       aria-label={ariaLabel}
       className={cn(
-        "inline-flex w-full gap-1 rounded-lg border border-border bg-muted p-1",
+        "inline-flex w-full gap-1 rounded-lg border border-border bg-muted",
+        size === "sm" ? "h-8 p-[3px]" : "p-1",
         className,
       )}
     >
@@ -51,7 +55,10 @@ function SegmentedControl<T extends string>({
               }
             }}
             className={cn(
-              "flex flex-1 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
+              "flex flex-1 flex-col rounded-md font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
+              size === "sm"
+                ? "items-center justify-center px-2.5 text-xs"
+                : "items-start gap-0.5 px-3 py-2 text-left text-sm",
               selected
                 ? "bg-background text-foreground shadow-soft"
                 : "text-muted-foreground hover:text-foreground",

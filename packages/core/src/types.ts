@@ -1,3 +1,5 @@
+import type { Recurrence } from "./recurrence";
+
 export type Priority = 0 | 1 | 2 | 3; // 0 = none, 1 = low, 2 = medium, 3 = high
 
 export interface Task {
@@ -12,6 +14,8 @@ export interface Task {
   listId: string | null;
   statusId: string;
   tags: string[];
+  /** Repeat cadence; completing a recurring task advances dueAt instead of closing it */
+  recurrence: Recurrence | null;
   completedAt: string | null;
   /** Sort key within a status column / list */
   sortOrder: number;

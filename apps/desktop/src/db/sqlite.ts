@@ -1,6 +1,6 @@
 import Database from "@tauri-apps/plugin-sql";
-import type { List, Priority, Status, Task } from "@dahoko/core";
-import type { NewTask, Repo, Subtask, TaskPatch } from "./repo";
+import type { List, Priority, Recurrence, Status, Task } from "@dahoko/core";
+import type { Completion, NewTask, Repo, Subtask, TaskPatch } from "./repo";
 import { newId, nowIso } from "./repo";
 
 interface TaskRow {
@@ -12,6 +12,7 @@ interface TaskRow {
   priority: number;
   list_id: string | null;
   status_id: string;
+  recurrence: string | null;
   completed_at: string | null;
   sort_order: number;
   created_at: string;
@@ -52,6 +53,7 @@ export class SqliteRepo implements Repo {
       listId: r.list_id,
       statusId: r.status_id,
       tags: tagsByTask.get(r.id) ?? [],
+      recurrence: (r.recurrence as Recurrence | null) ?? null,
       completedAt: r.completed_at,
       sortOrder: r.sort_order,
       createdAt: r.created_at,
@@ -74,8 +76,8 @@ export class SqliteRepo implements Repo {
     );
     const sortOrder = (maxRow[0]?.m ?? 0) + 1;
     await this.db.execute(
-      `INSERT INTO tasks (id, title, notes, due_at, has_due_time, priority, list_id, status_id, completed_at, sort_order, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10, $10)`,
+      `INSERT INTO tasks (id, title, notes, due_at, has_due_time, priority, list_id, status_id, recurrence, completed_at, sort_order, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10, $11, $11)`,
       [
         id,
         input.title,
@@ -85,6 +87,7 @@ export class SqliteRepo implements Repo {
         input.priority ?? 0,
         input.listId ?? null,
         statusId,
+        input.recurrence ?? null,
         sortOrder,
         now,
       ],
@@ -105,6 +108,7 @@ export class SqliteRepo implements Repo {
       listId: input.listId ?? null,
       statusId,
       tags: input.tags ?? [],
+      recurrence: input.recurrence ?? null,
       completedAt: null,
       sortOrder,
       createdAt: now,
@@ -129,6 +133,7 @@ export class SqliteRepo implements Repo {
     if (patch.priority !== undefined) push("priority", patch.priority);
     if (patch.listId !== undefined) push("list_id", patch.listId);
     if (patch.statusId !== undefined) push("status_id", patch.statusId);
+    if (patch.recurrence !== undefined) push("recurrence", patch.recurrence);
     if (patch.completedAt !== undefined) push("completed_at", patch.completedAt);
     if (patch.sortOrder !== undefined) push("sort_order", patch.sortOrder);
     push("updated_at", nowIso());
@@ -179,6 +184,32 @@ export class SqliteRepo implements Repo {
     return { id, name, color, sortOrder };
   }
 
+  async updateList(
+    id: string,
+    patch: { name?: string; color?: string },
+  ): Promise<void> {
+    if (patch.name !== undefined) {
+      await this.db.execute("UPDATE lists SET name = $1 WHERE id = $2", [
+        patch.name,
+        id,
+      ]);
+    }
+    if (patch.color !== undefined) {
+      await this.db.execute("UPDATE lists SET color = $1 WHERE id = $2", [
+        patch.color,
+        id,
+      ]);
+    }
+  }
+
+  async deleteList(id: string): Promise<void> {
+    await this.db.execute(
+      "UPDATE tasks SET list_id = NULL WHERE list_id = $1",
+      [id],
+    );
+    await this.db.execute("DELETE FROM lists WHERE id = $1", [id]);
+  }
+
   async listStatuses(): Promise<Status[]> {
     const rows = await this.db.select<
       {
@@ -208,6 +239,25 @@ export class SqliteRepo implements Repo {
         sort_order: number;
       }[]
     >("SELECT * FROM subtasks WHERE task_id = $1 ORDER BY sort_order", [taskId]);
+    return rows.map((r) => ({
+      id: r.id,
+      taskId: r.task_id,
+      title: r.title,
+      done: r.done === 1,
+      sortOrder: r.sort_order,
+    }));
+  }
+
+  async listAllSubtasks(): Promise<Subtask[]> {
+    const rows = await this.db.select<
+      {
+        id: string;
+        task_id: string;
+        title: string;
+        done: number;
+        sort_order: number;
+      }[]
+    >("SELECT * FROM subtasks ORDER BY sort_order");
     return rows.map((r) => ({
       id: r.id,
       taskId: r.task_id,
@@ -251,5 +301,29 @@ export class SqliteRepo implements Repo {
 
   async deleteSubtask(id: string): Promise<void> {
     await this.db.execute("DELETE FROM subtasks WHERE id = $1", [id]);
+  }
+
+  async listCompletions(): Promise<Completion[]> {
+    const rows = await this.db.select<
+      { id: string; task_id: string; due_date: string; completed_at: string }[]
+    >("SELECT * FROM task_completions ORDER BY due_date");
+    return rows.map((r) => ({
+      id: r.id,
+      taskId: r.task_id,
+      dueDate: r.due_date,
+      completedAt: r.completed_at,
+    }));
+  }
+
+  async addCompletion(taskId: string, dueDate: string): Promise<Completion> {
+    const id = newId();
+    const now = nowIso();
+    await this.db.execute(
+      `INSERT INTO task_completions (id, task_id, due_date, completed_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (task_id, due_date) DO UPDATE SET completed_at = $4`,
+      [id, taskId, dueDate, now],
+    );
+    return { id, taskId, dueDate, completedAt: now };
   }
 }

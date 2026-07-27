@@ -23,7 +23,7 @@ export function TaskCheckbox({
       className={cn(
         "grid h-[17px] w-[17px] flex-shrink-0 place-items-center rounded-md border-[1.5px] transition-colors",
         done
-          ? "border-primary-strong/40 bg-primary text-primary-foreground"
+          ? "animate-check-pop border-primary-strong/40 bg-primary text-primary-foreground"
           : task.priority === 3
             ? "border-destructive"
             : task.priority === 2
@@ -31,7 +31,9 @@ export function TaskCheckbox({
               : "border-input",
       )}
     >
-      {done ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+      {done ? (
+        <Check className="animate-check-in h-3 w-3" strokeWidth={3} />
+      ) : null}
     </button>
   );
 }

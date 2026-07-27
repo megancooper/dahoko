@@ -1,9 +1,16 @@
+import { CheckCircle2 } from "lucide-react";
 import type { Task } from "@dahoko/core";
 import { DUE_BUCKET_LABELS, groupByDueBucket } from "@dahoko/core";
 import { cn } from "@dahoko/ui";
 import { useStore } from "@/state/store";
 import { TaskCheckbox } from "../task-checkbox";
-import { DueLabel, PriorityFlag, TagChip } from "../task-chips";
+import {
+  AgeBars,
+  DueLabel,
+  RecurrenceChip,
+  SubtaskProgress,
+  TagChip,
+} from "../task-chips";
 
 export function TaskRow({
   task,
@@ -14,8 +21,9 @@ export function TaskRow({
   selected: boolean;
   onSelect: (id: string) => void;
 }) {
-  const { toggleComplete, lists } = useStore();
+  const { toggleComplete, lists, subtasks } = useStore();
   const list = lists.find((l) => l.id === task.listId);
+  const mine = subtasks.filter((s) => s.taskId === task.id);
   return (
     <div
       role="button"
@@ -25,21 +33,27 @@ export function TaskRow({
         if (event.key === "Enter") onSelect(task.id);
       }}
       className={cn(
-        "flex cursor-pointer items-center gap-3 rounded-md border border-transparent px-3 py-2 transition-colors hover:border-border/80 hover:bg-muted/60",
+        "flex animate-fade-in-up cursor-pointer items-center gap-3 rounded-md border border-transparent px-3 py-2 transition-colors hover:border-border/80 hover:bg-muted/60",
         selected && "border-primary/50 bg-primary/10",
       )}
     >
       <TaskCheckbox task={task} onToggle={() => void toggleComplete(task.id)} />
       <span
+        data-done={task.completedAt !== null}
         className={cn(
-          "truncate text-[13.5px]",
-          task.completedAt && "text-muted-foreground line-through",
+          "task-strike truncate text-[13.5px]",
+          task.completedAt && "text-muted-foreground",
         )}
       >
         {task.title}
       </span>
       <span className="ml-auto flex flex-shrink-0 items-center gap-1.5">
-        <PriorityFlag priority={task.priority} />
+        <RecurrenceChip task={task} />
+        <SubtaskProgress
+          done={mine.filter((s) => s.done).length}
+          total={mine.length}
+        />
+        <AgeBars task={task} />
         {task.tags.map((tag) => (
           <TagChip key={tag} tag={tag} />
         ))}
@@ -67,8 +81,9 @@ export function ListView({
 
   if (tasks.length === 0) {
     return (
-      <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-        No tasks here — add one above.
+      <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
+        <CheckCircle2 className="h-7 w-7 opacity-50" strokeWidth={1.5} />
+        <span className="text-sm">No tasks here — add one above.</span>
       </div>
     );
   }

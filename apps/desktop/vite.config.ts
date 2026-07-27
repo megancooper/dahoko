@@ -14,7 +14,9 @@ export default defineConfig({
   },
   server: {
     host: true,
-    port: 5103,
+    // PORT override lets a second dev server run alongside the default;
+    // Tauri always launches without PORT and gets the fixed 5103.
+    port: Number(process.env.PORT) || 5103,
     strictPort: true,
     watch: {
       ignored: ["**/src-tauri/**"],

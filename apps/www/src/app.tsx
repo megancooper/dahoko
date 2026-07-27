@@ -5,9 +5,12 @@ import {
   CardContent,
   ThemeToggle,
   TooltipProvider,
+  VersionBadge,
 } from "@dahoko/ui";
+import desktopConfig from "../../desktop/src-tauri/tauri.conf.json";
 
-const REPO_URL = "https://github.com/dahoko/dahoko";
+const REPO_URL = "https://github.com/megancooper/dahoko";
+const DOWNLOAD_URL = `${REPO_URL}/releases/latest`;
 
 const FEATURES = [
   {
@@ -46,6 +49,7 @@ function AppContent() {
           <span className="font-brand text-lg font-semibold tracking-tight">
             dahoko
           </span>
+          <VersionBadge version={desktopConfig.version} />
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" asChild>
@@ -74,7 +78,7 @@ function AppContent() {
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
             <Button size="lg" asChild>
-              <a href={REPO_URL} target="_blank" rel="noreferrer">
+              <a href={DOWNLOAD_URL} target="_blank" rel="noreferrer">
                 Download for desktop
               </a>
             </Button>

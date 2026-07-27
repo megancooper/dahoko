@@ -1,4 +1,5 @@
 import type { Priority } from "./types";
+import { nextOccurrence, type Recurrence } from "./recurrence";
 
 export interface QuickAddResult {
   title: string;
@@ -8,11 +9,14 @@ export interface QuickAddResult {
   dueDate: string | null;
   /** HH:MM if a time was given alongside a date word */
   dueTime: string | null;
+  /** Repeat cadence from "every day", "weekly", "every monday", … */
+  recurrence: Recurrence | null;
 }
 
 const PRIORITY_RE = /(?:^|\s)!(?:p([123])|(high|med|medium|low))(?=\s|$)/i;
 const TAG_RE = /(?:^|\s)#([\p{L}\p{N}_-]+)/gu;
 const TIME_RE = /(?:^|\s)(?:at\s+)?([01]?\d|2[0-3]):([0-5]\d)(?=\s|$)/;
+const RECUR_WORD_RE = /(?:^|\s)(daily|weekdays|weekly|monthly)(?=\s|$)/i;
 
 const WEEKDAYS = [
   "sunday",
@@ -23,6 +27,11 @@ const WEEKDAYS = [
   "friday",
   "saturday",
 ];
+
+const EVERY_RE = new RegExp(
+  `(?:^|\\s)every\\s+(day|weekday|week|month|${WEEKDAYS.join("|")}|${WEEKDAYS.map((w) => w.slice(0, 3)).join("|")})(?=\\s|$)`,
+  "i",
+);
 
 function toIsoDate(d: Date): string {
   const y = d.getFullYear();
@@ -118,7 +127,32 @@ export function parseQuickAdd(input: string, now = new Date()): QuickAddResult {
     return " ";
   });
 
-  let dueTime: string | null = null;
+  // Recurrence comes before date parsing so "every monday" isn't
+  // swallowed by the weekday date matcher.
+  let recurrence: Recurrence | null = null;
+  let anchorWeekday: number | null = null;
+  const em = EVERY_RE.exec(text);
+  if (em) {
+    const token = em[1].toLowerCase();
+    if (token === "day") recurrence = "daily";
+    else if (token === "weekday") recurrence = "weekdays";
+    else if (token === "week") recurrence = "weekly";
+    else if (token === "month") recurrence = "monthly";
+    else {
+      recurrence = "weekly";
+      anchorWeekday = WEEKDAYS.findIndex((w) =>
+        w.startsWith(token.slice(0, 3)),
+      );
+    }
+    text = text.replace(EVERY_RE, " ");
+  } else {
+    const rm = RECUR_WORD_RE.exec(text);
+    if (rm) {
+      recurrence = rm[1].toLowerCase() as Recurrence;
+      text = text.replace(RECUR_WORD_RE, " ");
+    }
+  }
+
   const dateMatch = findDate(text, now);
   let dueDate: string | null = null;
   if (dateMatch) {
@@ -126,6 +160,25 @@ export function parseQuickAdd(input: string, now = new Date()): QuickAddResult {
     text =
       text.slice(0, dateMatch.index) +
       text.slice(dateMatch.index + dateMatch.length);
+  } else if (recurrence) {
+    // Recurring tasks need a due-date anchor; default to the first
+    // occurrence from today.
+    const d = new Date(now);
+    if (anchorWeekday !== null) {
+      d.setDate(d.getDate() + ((anchorWeekday - d.getDay() + 7) % 7));
+      dueDate = toIsoDate(d);
+    } else if (
+      recurrence === "weekdays" &&
+      (d.getDay() === 0 || d.getDay() === 6)
+    ) {
+      dueDate = nextOccurrence(toIsoDate(d), "weekdays");
+    } else {
+      dueDate = toIsoDate(d);
+    }
+  }
+
+  let dueTime: string | null = null;
+  if (dueDate) {
     const tm = TIME_RE.exec(text);
     if (tm) {
       dueTime = `${tm[1].padStart(2, "0")}:${tm[2]}`;
@@ -134,5 +187,5 @@ export function parseQuickAdd(input: string, now = new Date()): QuickAddResult {
   }
 
   const title = text.replace(/\s+/g, " ").trim();
-  return { title, tags, priority, dueDate, dueTime };
+  return { title, tags, priority, dueDate, dueTime, recurrence };
 }

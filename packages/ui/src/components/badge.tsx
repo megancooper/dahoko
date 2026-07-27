@@ -71,6 +71,14 @@ export interface BadgeProps
   tone?: BadgeTone;
 }
 
+export interface VersionBadgeProps
+  extends Omit<
+    BadgeProps,
+    "children" | "icon" | "size" | "tone" | "variant"
+  > {
+  version: string;
+}
+
 function Badge({
   children,
   className,
@@ -97,4 +105,28 @@ function Badge({
   );
 }
 
-export { Badge, badgeVariants };
+function VersionBadge({
+  version,
+  className,
+  ...props
+}: VersionBadgeProps) {
+  const normalizedVersion = version.startsWith("v")
+    ? version.slice(1)
+    : version;
+
+  return (
+    <Badge
+      aria-label={`Version ${normalizedVersion}`}
+      tone="purple"
+      className={cn(
+        "min-h-[18px] px-1.5 py-0 font-mono text-[9.5px] tracking-[0.02em]",
+        className,
+      )}
+      {...props}
+    >
+      v{normalizedVersion}
+    </Badge>
+  );
+}
+
+export { Badge, VersionBadge, badgeVariants };

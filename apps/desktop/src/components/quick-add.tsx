@@ -29,6 +29,7 @@ export const QuickAdd = forwardRef<HTMLInputElement, { filter: Filter }>(
         priority: parsed.priority,
         dueAt,
         hasDueTime: parsed.dueTime !== null,
+        recurrence: parsed.recurrence,
         listId: filter.kind === "list" ? filter.listId : null,
       });
       setValue("");
@@ -47,6 +48,12 @@ export const QuickAdd = forwardRef<HTMLInputElement, { filter: Filter }>(
           ref={ref}
           value={value}
           onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void submit();
+            }
+          }}
           placeholder='Quick add… try "Buy milk tomorrow #errand !p2"'
           className="w-full bg-transparent text-[13.5px] outline-none placeholder:text-muted-foreground"
         />
