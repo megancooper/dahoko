@@ -41,7 +41,7 @@ jobs:
           cache: pnpm
 
       - name: Synchronize release version
-        run: node scripts/set-version.mjs "$RELEASE_VERSION"
+        run: node scripts/set-version.mjs
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -131,7 +131,7 @@ jobs:
             patchelf
 
       - name: Synchronize release version
-        run: node scripts/set-version.mjs "$RELEASE_VERSION"
+        run: node scripts/set-version.mjs
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

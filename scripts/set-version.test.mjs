@@ -33,11 +33,13 @@ test("synchronizes every desktop version file", async (t) => {
   const fixture = await createFixture();
   t.after(() => rm(fixture, { recursive: true, force: true }));
 
-  execFileSync(process.execPath, [versionScript, "2.3.4"], {
+  execFileSync(process.execPath, [versionScript], {
     cwd: fixture,
+    env: { ...process.env, RELEASE_VERSION: "2.3.4" },
   });
-  execFileSync(process.execPath, [versionScript, "app-v2.3.4", "--check"], {
+  execFileSync(process.execPath, [versionScript, "--check"], {
     cwd: fixture,
+    env: { ...process.env, RELEASE_VERSION: "app-v2.3.4" },
   });
 
   const packageJson = JSON.parse(

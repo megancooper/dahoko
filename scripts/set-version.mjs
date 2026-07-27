@@ -80,7 +80,10 @@ export async function setVersion(rawVersion, { check = false } = {}) {
 }
 
 async function main() {
-  const version = process.argv[2];
+  const versionArgument = process.argv
+    .slice(2)
+    .find((argument) => argument !== "--check");
+  const version = versionArgument ?? process.env.RELEASE_VERSION;
   const check = process.argv.includes("--check");
   const normalized = await setVersion(version, { check });
   process.stdout.write(
