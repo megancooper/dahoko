@@ -8,6 +8,7 @@ const MAX_LISTS: usize = 2_000;
 const MAX_STATUSES: usize = 100;
 const MAX_SUBTASKS: usize = 200_000;
 const MAX_COMPLETIONS: usize = 500_000;
+const MAX_WORKSPACES: usize = 100;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -17,6 +18,29 @@ pub struct BackupData {
     statuses: Vec<BackupStatus>,
     subtasks: Vec<BackupSubtask>,
     completions: Vec<BackupCompletion>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BackupWorkspace {
+    id: String,
+    name: String,
+    color: String,
+    sort_order: i64,
+    created_at: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkspaceSnapshot {
+    workspace: BackupWorkspace,
+    data: BackupData,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkspaceBundle {
+    workspaces: Vec<WorkspaceSnapshot>,
 }
 
 #[derive(Deserialize)]
@@ -191,35 +215,47 @@ fn validate(data: &BackupData) -> bool {
     true
 }
 
-fn replace(path: &std::path::Path, data: &BackupData) -> rusqlite::Result<()> {
-    let mut connection = Connection::open(path)?;
-    connection.pragma_update(None, "foreign_keys", "ON")?;
-    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+fn valid_workspace(workspace: &BackupWorkspace) -> bool {
+    valid_id(&workspace.id)
+        && valid_text(&workspace.name, 200, false)
+        && valid_color(&workspace.color)
+        && workspace.sort_order >= 0
+        && valid_text(&workspace.created_at, 64, false)
+}
 
-    transaction.execute("DELETE FROM task_completions", [])?;
-    transaction.execute("DELETE FROM subtasks", [])?;
-    transaction.execute("DELETE FROM task_tags", [])?;
-    transaction.execute("DELETE FROM tasks", [])?;
-    transaction.execute("DELETE FROM lists", [])?;
-    transaction.execute("DELETE FROM statuses", [])?;
-
+fn insert_data(
+    transaction: &rusqlite::Transaction<'_>,
+    workspace_id: &str,
+    data: &BackupData,
+) -> rusqlite::Result<()> {
     for status in &data.statuses {
         transaction.execute(
-            "INSERT INTO statuses (id, name, color, sort_order, is_done) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO statuses (
+                id, name, color, sort_order, is_done, workspace_id
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 status.id,
                 status.name,
                 status.color,
                 status.sort_order,
-                status.is_done as i64
+                status.is_done as i64,
+                workspace_id
             ],
         )?;
     }
 
     for list in &data.lists {
         transaction.execute(
-            "INSERT INTO lists (id, name, color, sort_order) VALUES (?1, ?2, ?3, ?4)",
-            params![list.id, list.name, list.color, list.sort_order],
+            "INSERT INTO lists (
+                id, name, color, sort_order, workspace_id
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                list.id,
+                list.name,
+                list.color,
+                list.sort_order,
+                workspace_id
+            ],
         )?;
     }
 
@@ -227,8 +263,11 @@ fn replace(path: &std::path::Path, data: &BackupData) -> rusqlite::Result<()> {
         transaction.execute(
             "INSERT INTO tasks (
                 id, title, notes, due_at, has_due_time, priority, list_id,
-                status_id, recurrence, completed_at, sort_order, created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                status_id, recurrence, completed_at, sort_order, created_at,
+                updated_at, workspace_id
+             ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14
+             )",
             params![
                 task.id,
                 task.title,
@@ -242,7 +281,8 @@ fn replace(path: &std::path::Path, data: &BackupData) -> rusqlite::Result<()> {
                 task.completed_at,
                 task.sort_order,
                 task.created_at,
-                task.updated_at
+                task.updated_at,
+                workspace_id
             ],
         )?;
         for tag in &task.tags {
@@ -255,44 +295,261 @@ fn replace(path: &std::path::Path, data: &BackupData) -> rusqlite::Result<()> {
 
     for subtask in &data.subtasks {
         transaction.execute(
-            "INSERT INTO subtasks (id, task_id, title, done, sort_order) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO subtasks (
+                id, task_id, title, done, sort_order, workspace_id
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 subtask.id,
                 subtask.task_id,
                 subtask.title,
                 subtask.done as i64,
-                subtask.sort_order
+                subtask.sort_order,
+                workspace_id
             ],
         )?;
     }
 
     for completion in &data.completions {
         transaction.execute(
-            "INSERT INTO task_completions (id, task_id, due_date, completed_at) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO task_completions (
+                id, task_id, due_date, completed_at, workspace_id
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 completion.id,
                 completion.task_id,
                 completion.due_date,
-                completion.completed_at
+                completion.completed_at,
+                workspace_id
             ],
         )?;
     }
 
-    transaction.commit()
+    Ok(())
 }
 
-#[tauri::command]
-pub fn replace_all_data(app: AppHandle, data: BackupData) -> Result<(), String> {
-    if !validate(&data) {
-        return Err("The backup data is invalid.".to_string());
-    }
-
+fn database_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     let directory = app
         .path()
         .app_data_dir()
         .map_err(|_| "Unable to open the local database.".to_string())?;
     std::fs::create_dir_all(&directory)
         .map_err(|_| "Unable to open the local database.".to_string())?;
-    replace(&directory.join("dahoko.db"), &data)
+    Ok(directory.join("dahoko.db"))
+}
+
+#[tauri::command]
+pub fn replace_all_data(
+    app: AppHandle,
+    workspace_id: String,
+    data: BackupData,
+) -> Result<(), String> {
+    if !valid_id(&workspace_id) || !validate(&data) {
+        return Err("The backup data is invalid.".to_string());
+    }
+
+    let path = database_path(&app)?;
+    let mut connection =
+        Connection::open(path).map_err(|_| "Unable to open the local database.".to_string())?;
+    connection
+        .pragma_update(None, "foreign_keys", "ON")
+        .map_err(|_| "Unable to open the local database.".to_string())?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|_| "The backup could not be imported safely.".to_string())?;
+    let exists: i64 = transaction
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM workspaces WHERE id = ?1)",
+            [&workspace_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "The backup could not be imported safely.".to_string())?;
+    if exists != 1 {
+        return Err("The selected workspace no longer exists.".to_string());
+    }
+
+    transaction
+        .execute(
+            "DELETE FROM task_completions WHERE workspace_id = ?1",
+            [&workspace_id],
+        )
+        .and_then(|_| {
+            transaction.execute(
+                "DELETE FROM subtasks WHERE workspace_id = ?1",
+                [&workspace_id],
+            )
+        })
+        .and_then(|_| {
+            transaction.execute(
+                "DELETE FROM task_tags
+                 WHERE task_id IN (
+                    SELECT id FROM tasks WHERE workspace_id = ?1
+                 )",
+                [&workspace_id],
+            )
+        })
+        .and_then(|_| {
+            transaction.execute("DELETE FROM tasks WHERE workspace_id = ?1", [&workspace_id])
+        })
+        .and_then(|_| {
+            transaction.execute("DELETE FROM lists WHERE workspace_id = ?1", [&workspace_id])
+        })
+        .and_then(|_| {
+            transaction.execute(
+                "DELETE FROM statuses WHERE workspace_id = ?1",
+                [&workspace_id],
+            )
+        })
+        .and_then(|_| insert_data(&transaction, &workspace_id, &data))
+        .and_then(|_| transaction.commit())
         .map_err(|_| "The backup could not be imported safely.".to_string())
+}
+
+#[tauri::command]
+pub fn create_workspace(app: AppHandle, workspace: BackupWorkspace) -> Result<(), String> {
+    if !valid_workspace(&workspace) {
+        return Err("The workspace is invalid.".to_string());
+    }
+    let path = database_path(&app)?;
+    let mut connection =
+        Connection::open(path).map_err(|_| "Unable to open the local database.".to_string())?;
+    connection
+        .pragma_update(None, "foreign_keys", "ON")
+        .map_err(|_| "Unable to open the local database.".to_string())?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|_| "The workspace could not be created.".to_string())?;
+    let workspace_count: i64 = transaction
+        .query_row("SELECT COUNT(*) FROM workspaces", [], |row| row.get(0))
+        .map_err(|_| "The workspace could not be created.".to_string())?;
+    if workspace_count >= MAX_WORKSPACES as i64 {
+        return Err("Dahoko supports up to 100 workspaces.".to_string());
+    }
+
+    transaction
+        .execute(
+            "INSERT INTO workspaces (
+                id, name, color, sort_order, created_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                workspace.id,
+                workspace.name,
+                workspace.color,
+                workspace.sort_order,
+                workspace.created_at
+            ],
+        )
+        .and_then(|_| {
+            for (index, (name, color, is_done)) in [
+                ("Backlog", "#808FA0", 0_i64),
+                ("In progress", "#A3D0FF", 0_i64),
+                ("Done", "#2A7A5C", 1_i64),
+            ]
+            .iter()
+            .enumerate()
+            {
+                transaction.execute(
+                    "INSERT INTO statuses (
+                        id, name, color, sort_order, is_done, workspace_id
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        format!("{}:status-{}", workspace.id, index),
+                        name,
+                        color,
+                        index as i64,
+                        is_done,
+                        workspace.id
+                    ],
+                )?;
+            }
+            Ok(0)
+        })
+        .and_then(|_| transaction.commit())
+        .map_err(|_| "The workspace could not be created.".to_string())
+}
+
+fn validate_bundle(bundle: &WorkspaceBundle) -> bool {
+    if bundle.workspaces.is_empty() || bundle.workspaces.len() > MAX_WORKSPACES {
+        return false;
+    }
+    let mut workspace_ids = HashSet::new();
+    let mut entity_ids = HashSet::new();
+    for snapshot in &bundle.workspaces {
+        if !valid_workspace(&snapshot.workspace)
+            || !workspace_ids.insert(snapshot.workspace.id.as_str())
+            || !validate(&snapshot.data)
+        {
+            return false;
+        }
+        for id in snapshot
+            .data
+            .statuses
+            .iter()
+            .map(|item| item.id.as_str())
+            .chain(snapshot.data.lists.iter().map(|item| item.id.as_str()))
+            .chain(snapshot.data.tasks.iter().map(|item| item.id.as_str()))
+            .chain(snapshot.data.subtasks.iter().map(|item| item.id.as_str()))
+            .chain(
+                snapshot
+                    .data
+                    .completions
+                    .iter()
+                    .map(|item| item.id.as_str()),
+            )
+        {
+            if !entity_ids.insert(id) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+#[tauri::command]
+pub fn replace_workspace_bundle(app: AppHandle, bundle: WorkspaceBundle) -> Result<(), String> {
+    if !validate_bundle(&bundle) {
+        return Err("The synced workspace data is invalid.".to_string());
+    }
+    let path = database_path(&app)?;
+    let mut connection =
+        Connection::open(path).map_err(|_| "Unable to open the local database.".to_string())?;
+    connection
+        .pragma_update(None, "foreign_keys", "ON")
+        .map_err(|_| "Unable to open the local database.".to_string())?;
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|_| "Synced workspaces could not be applied safely.".to_string())?;
+
+    let result = transaction
+        .execute("DELETE FROM task_completions", [])
+        .and_then(|_| transaction.execute("DELETE FROM subtasks", []))
+        .and_then(|_| transaction.execute("DELETE FROM task_tags", []))
+        .and_then(|_| transaction.execute("DELETE FROM tasks", []))
+        .and_then(|_| transaction.execute("DELETE FROM lists", []))
+        .and_then(|_| transaction.execute("DELETE FROM statuses", []))
+        .and_then(|_| transaction.execute("DELETE FROM workspaces", []));
+    if result.is_err() {
+        return Err("Synced workspaces could not be applied safely.".to_string());
+    }
+
+    for snapshot in &bundle.workspaces {
+        transaction
+            .execute(
+                "INSERT INTO workspaces (
+                    id, name, color, sort_order, created_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    snapshot.workspace.id,
+                    snapshot.workspace.name,
+                    snapshot.workspace.color,
+                    snapshot.workspace.sort_order,
+                    snapshot.workspace.created_at
+                ],
+            )
+            .and_then(|_| insert_data(&transaction, &snapshot.workspace.id, &snapshot.data))
+            .map_err(|_| "Synced workspaces could not be applied safely.".to_string())?;
+    }
+
+    transaction
+        .commit()
+        .map_err(|_| "Synced workspaces could not be applied safely.".to_string())
 }

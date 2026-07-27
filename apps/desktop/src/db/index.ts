@@ -7,6 +7,9 @@ export type {
   RepoSnapshot,
   Subtask,
   TaskPatch,
+  Workspace,
+  WorkspaceBundleSnapshot,
+  WorkspaceSnapshot,
 } from "./repo";
 
 export function isTauri(): boolean {

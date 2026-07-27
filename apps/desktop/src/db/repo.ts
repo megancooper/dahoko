@@ -25,6 +25,23 @@ export interface RepoSnapshot {
   completions: Completion[];
 }
 
+export interface Workspace {
+  id: string;
+  name: string;
+  color: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface WorkspaceSnapshot {
+  workspace: Workspace;
+  data: RepoSnapshot;
+}
+
+export interface WorkspaceBundleSnapshot {
+  workspaces: WorkspaceSnapshot[];
+}
+
 export interface NewTask {
   title: string;
   notes?: string;
@@ -53,6 +70,10 @@ export interface TaskPatch {
 
 export interface Repo {
   init(): Promise<void>;
+  listWorkspaces(): Promise<Workspace[]>;
+  getActiveWorkspaceId(): string;
+  setActiveWorkspace(id: string): Promise<void>;
+  createWorkspace(name: string, color: string): Promise<Workspace>;
   listTasks(): Promise<Task[]>;
   createTask(input: NewTask): Promise<Task>;
   updateTask(id: string, patch: TaskPatch): Promise<void>;
@@ -72,6 +93,8 @@ export interface Repo {
   addCompletion(taskId: string, dueDate: string): Promise<Completion>;
   /** Replaces every user-owned record after the caller validates a backup. */
   replaceData(data: RepoSnapshot): Promise<void>;
+  exportWorkspaceBundle(): Promise<WorkspaceBundleSnapshot>;
+  replaceWorkspaceBundle(bundle: WorkspaceBundleSnapshot): Promise<void>;
 }
 
 export function newId(): string {

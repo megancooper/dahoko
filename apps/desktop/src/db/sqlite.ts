@@ -8,6 +8,8 @@ import type {
   RepoSnapshot,
   Subtask,
   TaskPatch,
+  Workspace,
+  WorkspaceBundleSnapshot,
 } from "./repo";
 import { newId, nowIso } from "./repo";
 
@@ -33,17 +35,76 @@ interface TaskRow {
  */
 export class SqliteRepo implements Repo {
   private db!: Database;
+  private activeWorkspaceId = "workspace-personal";
 
   async init(): Promise<void> {
     this.db = await Database.load("sqlite:dahoko.db");
+    const [first] = await this.listWorkspaces();
+    if (!first) throw new Error("Dahoko needs at least one workspace.");
+    this.activeWorkspaceId = first.id;
+  }
+
+  async listWorkspaces(): Promise<Workspace[]> {
+    const rows = await this.db.select<
+      {
+        id: string;
+        name: string;
+        color: string;
+        sort_order: number;
+        created_at: string;
+      }[]
+    >("SELECT * FROM workspaces ORDER BY sort_order, created_at, id");
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      color: row.color,
+      sortOrder: row.sort_order,
+      createdAt: row.created_at,
+    }));
+  }
+
+  getActiveWorkspaceId(): string {
+    return this.activeWorkspaceId;
+  }
+
+  async setActiveWorkspace(id: string): Promise<void> {
+    const rows = await this.db.select<{ id: string }[]>(
+      "SELECT id FROM workspaces WHERE id = $1 LIMIT 1",
+      [id],
+    );
+    if (!rows[0]) throw new Error("That workspace no longer exists.");
+    this.activeWorkspaceId = id;
+  }
+
+  async createWorkspace(name: string, color: string): Promise<Workspace> {
+    const id = newId();
+    const createdAt = nowIso();
+    const maxRow = await this.db.select<{ m: number | null }[]>(
+      "SELECT MAX(sort_order) AS m FROM workspaces",
+    );
+    const workspace: Workspace = {
+      id,
+      name,
+      color,
+      sortOrder: (maxRow[0]?.m ?? -1) + 1,
+      createdAt,
+    };
+    await invoke("create_workspace", { workspace });
+    return workspace;
   }
 
   async listTasks(): Promise<Task[]> {
     const rows = await this.db.select<TaskRow[]>(
-      "SELECT * FROM tasks ORDER BY sort_order",
+      "SELECT * FROM tasks WHERE workspace_id = $1 ORDER BY sort_order",
+      [this.activeWorkspaceId],
     );
     const tagRows = await this.db.select<{ task_id: string; tag: string }[]>(
-      "SELECT task_id, tag FROM task_tags ORDER BY tag",
+      `SELECT task_tags.task_id, task_tags.tag
+       FROM task_tags
+       JOIN tasks ON tasks.id = task_tags.task_id
+       WHERE tasks.workspace_id = $1
+       ORDER BY task_tags.tag`,
+      [this.activeWorkspaceId],
     );
     const tagsByTask = new Map<string, string[]>();
     for (const { task_id, tag } of tagRows) {
@@ -76,16 +137,25 @@ export class SqliteRepo implements Repo {
       input.statusId ??
       (
         await this.db.select<{ id: string }[]>(
-          "SELECT id FROM statuses WHERE is_done = 0 ORDER BY sort_order LIMIT 1",
+          `SELECT id FROM statuses
+           WHERE workspace_id = $1 AND is_done = 0
+           ORDER BY sort_order LIMIT 1`,
+          [this.activeWorkspaceId],
         )
       )[0].id;
     const maxRow = await this.db.select<{ m: number | null }[]>(
-      "SELECT MAX(sort_order) as m FROM tasks",
+      "SELECT MAX(sort_order) as m FROM tasks WHERE workspace_id = $1",
+      [this.activeWorkspaceId],
     );
     const sortOrder = (maxRow[0]?.m ?? 0) + 1;
     await this.db.execute(
-      `INSERT INTO tasks (id, title, notes, due_at, has_due_time, priority, list_id, status_id, recurrence, completed_at, sort_order, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10, $11, $11)`,
+      `INSERT INTO tasks (
+         id, title, notes, due_at, has_due_time, priority, list_id, status_id,
+         recurrence, completed_at, sort_order, created_at, updated_at,
+         workspace_id
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10, $11, $11, $12
+       )`,
       [
         id,
         input.title,
@@ -98,6 +168,7 @@ export class SqliteRepo implements Repo {
         input.recurrence ?? null,
         sortOrder,
         now,
+        this.activeWorkspaceId,
       ],
     );
     for (const tag of input.tags ?? []) {
@@ -146,31 +217,58 @@ export class SqliteRepo implements Repo {
     if (patch.sortOrder !== undefined) push("sort_order", patch.sortOrder);
     push("updated_at", nowIso());
     args.push(id);
+    args.push(this.activeWorkspaceId);
     await this.db.execute(
-      `UPDATE tasks SET ${sets.join(", ")} WHERE id = $${i}`,
+      `UPDATE tasks SET ${sets.join(", ")}
+       WHERE id = $${i} AND workspace_id = $${i + 1}`,
       args,
     );
     if (patch.tags !== undefined) {
-      await this.db.execute("DELETE FROM task_tags WHERE task_id = $1", [id]);
+      await this.db.execute(
+        `DELETE FROM task_tags
+         WHERE task_id IN (
+           SELECT id FROM tasks WHERE id = $1 AND workspace_id = $2
+         )`,
+        [id, this.activeWorkspaceId],
+      );
       for (const tag of patch.tags) {
         await this.db.execute(
-          "INSERT OR IGNORE INTO task_tags (task_id, tag) VALUES ($1, $2)",
-          [id, tag],
+          `INSERT OR IGNORE INTO task_tags (task_id, tag)
+           SELECT $1, $2
+           WHERE EXISTS (
+             SELECT 1 FROM tasks WHERE id = $1 AND workspace_id = $3
+           )`,
+          [id, tag, this.activeWorkspaceId],
         );
       }
     }
   }
 
   async deleteTask(id: string): Promise<void> {
-    await this.db.execute("DELETE FROM subtasks WHERE task_id = $1", [id]);
-    await this.db.execute("DELETE FROM task_tags WHERE task_id = $1", [id]);
-    await this.db.execute("DELETE FROM tasks WHERE id = $1", [id]);
+    await this.db.execute(
+      "DELETE FROM subtasks WHERE task_id = $1 AND workspace_id = $2",
+      [id, this.activeWorkspaceId],
+    );
+    await this.db.execute(
+      `DELETE FROM task_tags
+       WHERE task_id IN (
+         SELECT id FROM tasks WHERE id = $1 AND workspace_id = $2
+       )`,
+      [id, this.activeWorkspaceId],
+    );
+    await this.db.execute(
+      "DELETE FROM tasks WHERE id = $1 AND workspace_id = $2",
+      [id, this.activeWorkspaceId],
+    );
   }
 
   async listLists(): Promise<List[]> {
     const rows = await this.db.select<
       { id: string; name: string; color: string; sort_order: number }[]
-    >("SELECT * FROM lists ORDER BY sort_order");
+    >(
+      "SELECT * FROM lists WHERE workspace_id = $1 ORDER BY sort_order",
+      [this.activeWorkspaceId],
+    );
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
@@ -182,12 +280,14 @@ export class SqliteRepo implements Repo {
   async createList(name: string, color: string): Promise<List> {
     const id = newId();
     const maxRow = await this.db.select<{ m: number | null }[]>(
-      "SELECT MAX(sort_order) as m FROM lists",
+      "SELECT MAX(sort_order) as m FROM lists WHERE workspace_id = $1",
+      [this.activeWorkspaceId],
     );
     const sortOrder = (maxRow[0]?.m ?? 0) + 1;
     await this.db.execute(
-      "INSERT INTO lists (id, name, color, sort_order) VALUES ($1, $2, $3, $4)",
-      [id, name, color, sortOrder],
+      `INSERT INTO lists (id, name, color, sort_order, workspace_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [id, name, color, sortOrder, this.activeWorkspaceId],
     );
     return { id, name, color, sortOrder };
   }
@@ -197,25 +297,29 @@ export class SqliteRepo implements Repo {
     patch: { name?: string; color?: string },
   ): Promise<void> {
     if (patch.name !== undefined) {
-      await this.db.execute("UPDATE lists SET name = $1 WHERE id = $2", [
-        patch.name,
-        id,
-      ]);
+      await this.db.execute(
+        "UPDATE lists SET name = $1 WHERE id = $2 AND workspace_id = $3",
+        [patch.name, id, this.activeWorkspaceId],
+      );
     }
     if (patch.color !== undefined) {
-      await this.db.execute("UPDATE lists SET color = $1 WHERE id = $2", [
-        patch.color,
-        id,
-      ]);
+      await this.db.execute(
+        "UPDATE lists SET color = $1 WHERE id = $2 AND workspace_id = $3",
+        [patch.color, id, this.activeWorkspaceId],
+      );
     }
   }
 
   async deleteList(id: string): Promise<void> {
     await this.db.execute(
-      "UPDATE tasks SET list_id = NULL WHERE list_id = $1",
-      [id],
+      `UPDATE tasks SET list_id = NULL
+       WHERE list_id = $1 AND workspace_id = $2`,
+      [id, this.activeWorkspaceId],
     );
-    await this.db.execute("DELETE FROM lists WHERE id = $1", [id]);
+    await this.db.execute(
+      "DELETE FROM lists WHERE id = $1 AND workspace_id = $2",
+      [id, this.activeWorkspaceId],
+    );
   }
 
   async listStatuses(): Promise<Status[]> {
@@ -227,7 +331,10 @@ export class SqliteRepo implements Repo {
         sort_order: number;
         is_done: number;
       }[]
-    >("SELECT * FROM statuses ORDER BY sort_order");
+    >(
+      "SELECT * FROM statuses WHERE workspace_id = $1 ORDER BY sort_order",
+      [this.activeWorkspaceId],
+    );
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
@@ -246,7 +353,12 @@ export class SqliteRepo implements Repo {
         done: number;
         sort_order: number;
       }[]
-    >("SELECT * FROM subtasks WHERE task_id = $1 ORDER BY sort_order", [taskId]);
+    >(
+      `SELECT * FROM subtasks
+       WHERE task_id = $1 AND workspace_id = $2
+       ORDER BY sort_order`,
+      [taskId, this.activeWorkspaceId],
+    );
     return rows.map((r) => ({
       id: r.id,
       taskId: r.task_id,
@@ -265,7 +377,10 @@ export class SqliteRepo implements Repo {
         done: number;
         sort_order: number;
       }[]
-    >("SELECT * FROM subtasks ORDER BY sort_order");
+    >(
+      "SELECT * FROM subtasks WHERE workspace_id = $1 ORDER BY sort_order",
+      [this.activeWorkspaceId],
+    );
     return rows.map((r) => ({
       id: r.id,
       taskId: r.task_id,
@@ -278,13 +393,16 @@ export class SqliteRepo implements Repo {
   async createSubtask(taskId: string, title: string): Promise<Subtask> {
     const id = newId();
     const maxRow = await this.db.select<{ m: number | null }[]>(
-      "SELECT MAX(sort_order) as m FROM subtasks WHERE task_id = $1",
-      [taskId],
+      `SELECT MAX(sort_order) as m FROM subtasks
+       WHERE task_id = $1 AND workspace_id = $2`,
+      [taskId, this.activeWorkspaceId],
     );
     const sortOrder = (maxRow[0]?.m ?? 0) + 1;
     await this.db.execute(
-      "INSERT INTO subtasks (id, task_id, title, done, sort_order) VALUES ($1, $2, $3, 0, $4)",
-      [id, taskId, title, sortOrder],
+      `INSERT INTO subtasks (
+         id, task_id, title, done, sort_order, workspace_id
+       ) VALUES ($1, $2, $3, 0, $4, $5)`,
+      [id, taskId, title, sortOrder, this.activeWorkspaceId],
     );
     return { id, taskId, title, done: false, sortOrder };
   }
@@ -294,27 +412,36 @@ export class SqliteRepo implements Repo {
     patch: { title?: string; done?: boolean },
   ): Promise<void> {
     if (patch.title !== undefined) {
-      await this.db.execute("UPDATE subtasks SET title = $1 WHERE id = $2", [
-        patch.title,
-        id,
-      ]);
+      await this.db.execute(
+        `UPDATE subtasks SET title = $1
+         WHERE id = $2 AND workspace_id = $3`,
+        [patch.title, id, this.activeWorkspaceId],
+      );
     }
     if (patch.done !== undefined) {
-      await this.db.execute("UPDATE subtasks SET done = $1 WHERE id = $2", [
-        patch.done ? 1 : 0,
-        id,
-      ]);
+      await this.db.execute(
+        `UPDATE subtasks SET done = $1
+         WHERE id = $2 AND workspace_id = $3`,
+        [patch.done ? 1 : 0, id, this.activeWorkspaceId],
+      );
     }
   }
 
   async deleteSubtask(id: string): Promise<void> {
-    await this.db.execute("DELETE FROM subtasks WHERE id = $1", [id]);
+    await this.db.execute(
+      "DELETE FROM subtasks WHERE id = $1 AND workspace_id = $2",
+      [id, this.activeWorkspaceId],
+    );
   }
 
   async listCompletions(): Promise<Completion[]> {
     const rows = await this.db.select<
       { id: string; task_id: string; due_date: string; completed_at: string }[]
-    >("SELECT * FROM task_completions ORDER BY due_date");
+    >(
+      `SELECT * FROM task_completions
+       WHERE workspace_id = $1 ORDER BY due_date`,
+      [this.activeWorkspaceId],
+    );
     return rows.map((r) => ({
       id: r.id,
       taskId: r.task_id,
@@ -327,15 +454,60 @@ export class SqliteRepo implements Repo {
     const id = newId();
     const now = nowIso();
     await this.db.execute(
-      `INSERT INTO task_completions (id, task_id, due_date, completed_at)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO task_completions (
+         id, task_id, due_date, completed_at, workspace_id
+       ) VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (task_id, due_date) DO UPDATE SET completed_at = $4`,
-      [id, taskId, dueDate, now],
+      [id, taskId, dueDate, now, this.activeWorkspaceId],
     );
     return { id, taskId, dueDate, completedAt: now };
   }
 
   async replaceData(data: RepoSnapshot): Promise<void> {
-    await invoke("replace_all_data", { data });
+    await invoke("replace_all_data", {
+      workspaceId: this.activeWorkspaceId,
+      data,
+    });
+  }
+
+  private async snapshotActiveWorkspace(): Promise<RepoSnapshot> {
+    const [tasks, lists, statuses, subtasks, completions] = await Promise.all([
+      this.listTasks(),
+      this.listLists(),
+      this.listStatuses(),
+      this.listAllSubtasks(),
+      this.listCompletions(),
+    ]);
+    return { tasks, lists, statuses, subtasks, completions };
+  }
+
+  async exportWorkspaceBundle(): Promise<WorkspaceBundleSnapshot> {
+    const originalWorkspaceId = this.activeWorkspaceId;
+    const workspaces = await this.listWorkspaces();
+    const snapshots = [];
+    try {
+      for (const workspace of workspaces) {
+        this.activeWorkspaceId = workspace.id;
+        snapshots.push({
+          workspace,
+          data: await this.snapshotActiveWorkspace(),
+        });
+      }
+    } finally {
+      this.activeWorkspaceId = originalWorkspaceId;
+    }
+    return { workspaces: snapshots };
+  }
+
+  async replaceWorkspaceBundle(
+    bundle: WorkspaceBundleSnapshot,
+  ): Promise<void> {
+    await invoke("replace_workspace_bundle", { bundle });
+    const workspaceIds = new Set(
+      bundle.workspaces.map((snapshot) => snapshot.workspace.id),
+    );
+    if (!workspaceIds.has(this.activeWorkspaceId)) {
+      this.activeWorkspaceId = bundle.workspaces[0].workspace.id;
+    }
   }
 }

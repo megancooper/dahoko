@@ -1,0 +1,20 @@
+services:
+  sync:
+    build:
+      context: .
+      dockerfile: apps/sync-server/Dockerfile
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8787
+      DAHOKO_SYNC_DATABASE: /data/dahoko-sync.sqlite
+      DAHOKO_SYNC_ORIGINS: ${DAHOKO_SYNC_ORIGINS:-tauri://localhost,http://tauri.localhost}
+      DAHOKO_TRUST_PROXY: ${DAHOKO_TRUST_PROXY:-false}
+      DAHOKO_ACCOUNT_HASH_KEY: ${DAHOKO_ACCOUNT_HASH_KEY:?Set DAHOKO_ACCOUNT_HASH_KEY to a stable random secret}
+    ports:
+      - "${DAHOKO_SYNC_PORT:-8787}:8787"
+    volumes:
+      - dahoko-sync-data:/data
+
+volumes:
+  dahoko-sync-data:

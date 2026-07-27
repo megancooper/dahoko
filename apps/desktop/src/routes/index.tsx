@@ -3,7 +3,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { Button, SegmentedControl, cn } from "@dahoko/ui";
 import { useStore } from "@/state/store";
-import { useSettings } from "@/state/settings";
+import {
+  defaultViewForFilter,
+  useSettings,
+  type DefaultView,
+} from "@/state/settings";
 import { applyFilter, filterTitle, type Filter } from "@/state/filters";
 import { Sidebar } from "@/components/sidebar";
 import { QuickAdd } from "@/components/quick-add";
@@ -17,15 +21,19 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
-type ViewMode = "list" | "board" | "tags";
-
 function HomePage() {
   const { ready, tasks, lists } = useStore();
   const { settings } = useSettings();
   const [filter, setFilter] = useState<Filter>({ kind: "inbox" });
-  const [view, setView] = useState<ViewMode>(settings.defaultView);
+  const [view, setView] = useState<DefaultView>(() =>
+    defaultViewForFilter(settings.defaultViews, "inbox"),
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const quickAddRef = useRef<HTMLInputElement>(null);
+  const preferredView = defaultViewForFilter(
+    settings.defaultViews,
+    filter.kind,
+  );
 
   const visibleTasks = useMemo(() => {
     const filtered = applyFilter(tasks, filter);
@@ -35,6 +43,10 @@ function HomePage() {
     return filtered;
   }, [tasks, filter, settings.showCompletedInInbox]);
   const selectedTask = tasks.find((t) => t.id === selectedId) ?? null;
+
+  useEffect(() => {
+    setView(preferredView);
+  }, [preferredView]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -61,6 +73,7 @@ function HomePage() {
         filter={filter}
         onFilterChange={(next) => {
           setFilter(next);
+          setView(defaultViewForFilter(settings.defaultViews, next.kind));
           setSelectedId(null);
         }}
       />
@@ -71,7 +84,7 @@ function HomePage() {
             {filterTitle(filter, (id) => lists.find((l) => l.id === id)?.name)}
           </h1>
           <div className="ml-auto flex items-center gap-3">
-            <SegmentedControl<ViewMode>
+            <SegmentedControl<DefaultView>
               aria-label="View mode"
               value={view}
               onValueChange={setView}
