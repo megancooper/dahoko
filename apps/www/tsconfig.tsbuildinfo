@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/content.ts","./src/docs.tsx","./src/main.tsx","./vite.config.ts","./tailwind.config.ts"],"version":"5.7.3"}
+{"root":["./src/app.tsx","./src/content.ts","./src/docs.tsx","./src/landing.tsx","./src/main.tsx","./vite.config.ts","./tailwind.config.ts"],"version":"5.7.3"}
