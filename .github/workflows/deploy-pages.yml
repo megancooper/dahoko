@@ -1,0 +1,68 @@
+name: Deploy website
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-pages.yml"
+      - "apps/www/**"
+      - "apps/desktop/src-tauri/tauri.conf.json"
+      - "packages/ui/**"
+      - "packages/typescript-config/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  workflow_run:
+    workflows:
+      - Semantic release
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-pages-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
+
+      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
+        with:
+          version: 8.15.6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22.22.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build website
+        run: pnpm --filter @dahoko/www build
+
+      - name: Deploy to Cloudflare Pages
+        working-directory: apps/www
+        run: >-
+          pnpm exec wrangler pages deploy dist
+          --project-name dahoko
+          --branch main
+          --commit-hash "$(git rev-parse HEAD)"
+
+      - name: Configure dahoko.com
+        run: node scripts/configure-pages-domain.mjs
