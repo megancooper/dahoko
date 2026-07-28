@@ -37,6 +37,7 @@ import {
   DocsSearchDialog,
   InternalLink,
 } from "./docs";
+import { LandingExperience } from "./landing";
 
 const REPO_URL = "https://github.com/megancooper/dahoko";
 const DOWNLOAD_URL = `${REPO_URL}/releases/latest`;
@@ -126,7 +127,7 @@ export function App() {
             />
           </>
         ) : (
-          <LandingPage onNavigate={navigate} />
+          <LandingExperience onNavigate={navigate} />
         )}
 
         <DocsSearchDialog
@@ -154,13 +155,25 @@ function SiteHeader({
 }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 w-full max-w-[1500px] items-center gap-4 px-4 sm:px-6">
+      <div
+        className={`mx-auto flex h-16 w-full items-center gap-4 ${
+          isDocs
+            ? "max-w-[1500px] px-4 sm:px-6"
+            : "landing-header-frame"
+        }`}
+      >
         <InternalLink
           href="/"
           onNavigate={onNavigate}
           className="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
         >
-          <span className="grid h-8 w-8 place-items-center rounded-[10px] border border-primary-strong/25 bg-primary text-primary-foreground shadow-[0_5px_15px_-7px_rgb(var(--brand-primary-depth)/0.65)]">
+          <span
+            className={`grid h-8 w-8 place-items-center rounded-[10px] border border-primary-strong/25 bg-primary text-primary-foreground ${
+              isDocs
+                ? "shadow-[0_5px_15px_-7px_rgb(var(--brand-primary-depth)/0.65)]"
+                : "landing-header-mark"
+            }`}
+          >
             <Check aria-hidden="true" className="h-[18px] w-[18px]" strokeWidth={3} />
           </span>
           <span className="font-brand text-[17px] font-bold tracking-[-0.025em]">
@@ -259,7 +272,11 @@ function SiteHeader({
           aria-label="Mobile navigation"
           className="border-t border-border bg-background px-4 py-4 md:hidden"
         >
-          <div className="mx-auto grid max-w-[1500px] gap-1">
+          <div
+            className={`mx-auto grid gap-1 ${
+              isDocs ? "max-w-[1500px]" : "max-w-[1180px]"
+            }`}
+          >
             <InternalLink
               href="/docs/getting-started"
               onNavigate={onNavigate}
@@ -328,7 +345,11 @@ function MobileDocsNav({
   );
 }
 
-function LandingPage({ onNavigate }: { onNavigate: (path: string) => void }) {
+export function LegacyLandingPage({
+  onNavigate,
+}: {
+  onNavigate: (path: string) => void;
+}) {
   return (
     <>
       <main className="overflow-hidden">
