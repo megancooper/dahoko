@@ -5,30 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="dahoko is an open-source task manager. Your tasks, your views, your database — swimlanes, tags, and lists on top of local SQLite."
+      content="Dahoko is a private, local-first task manager with fluid views, isolated workspaces, and optional end-to-end encrypted sync."
     />
     <meta name="theme-color" content="#A3D0FF" />
+    <meta name="color-scheme" content="light dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Dahoko" />
+    <meta
+      property="og:title"
+      content="Dahoko — private, local-first task management"
+    />
+    <meta
+      property="og:description"
+      content="Your work, in your hands. Local SQLite, flexible views, workspaces, and end-to-end encrypted sync."
+    />
+    <meta property="og:url" content="https://dahoko.com" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="canonical" href="https://dahoko.com" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <title>dahoko — your tasks, your views, your database</title>
-    <script>
-      (function () {
-        try {
-          var stored = localStorage.getItem("dahoko.theme");
-          var dark =
-            stored === "dark" ||
-            (stored !== "light" &&
-              matchMedia("(prefers-color-scheme: dark)").matches);
-          document.documentElement.classList.toggle("dark", dark);
-        } catch (error) {
-          /* theme falls back to light */
-        }
-      })();
-    </script>
+    <title>dahoko — private, local-first task management</title>
+    <script src="/theme.js"></script>
   </head>
   <body>
     <div id="root"></div>

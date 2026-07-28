@@ -5,6 +5,7 @@
     "dev": "turbo run dev --filter=@dahoko/desktop --filter=@dahoko/www",
     "dev:desktop": "turbo run dev --filter=@dahoko/desktop",
     "dev:www": "turbo run dev --filter=@dahoko/www",
+    "configure:pages-domain": "node scripts/configure-pages-domain.mjs",
     "tauri": "pnpm --filter @dahoko/desktop tauri",
     "build": "turbo run build",
     "lint": "turbo run lint",
