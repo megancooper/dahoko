@@ -1,0 +1,4 @@
+<resources>
+    <!-- dahoko brand: pastel blue tile, deep navy check (see packages/ui). -->
+    <color name="ic_launcher_background">#A3D0FF</color>
+</resources>

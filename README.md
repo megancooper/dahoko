@@ -7,6 +7,7 @@ An open-source task manager (a TickTick alternative), built with Tauri v2, React
 | Path | What it is |
 | --- | --- |
 | `apps/desktop` | The Tauri v2 desktop app (React 19 + Vite + TanStack Router, SQLite via `tauri-plugin-sql`) |
+| `apps/android` | Native Android app (Kotlin + Jetpack Compose + Room) with the same encrypted sync protocol |
 | `apps/sync-server` | Optional privacy-focused encrypted sync server (Node + SQLite) |
 | `apps/www` | Landing page (Vite + React) |
 | `packages/ui` | Shared component library (Radix + Tailwind) |

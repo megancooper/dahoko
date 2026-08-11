@@ -1,0 +1,12 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Machine-specific SDK location
+local.properties
+
+# IDE
+.idea/
+*.iml
+.kotlin/
