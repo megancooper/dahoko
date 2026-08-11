@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Check,
+  Cloud,
   Columns3,
   Download,
   EyeOff,
@@ -11,7 +12,7 @@ import {
   Server,
   Star,
 } from "lucide-react";
-import { Button } from "@dahoko/ui";
+import { Button, cn } from "@dahoko/ui";
 import {
   useEffect,
   useMemo,
@@ -252,6 +253,7 @@ export function LandingExperience({
 }) {
   return (
     <div className="landing-page">
+      <CheckoutSuccessBanner />
       <main>
         <section className="landing-hero">
           <TaskRain />
@@ -358,6 +360,8 @@ export function LandingExperience({
 
         <WorkspaceStory onNavigate={onNavigate} />
 
+        <CloudPricing onNavigate={onNavigate} />
+
         <section className="landing-final">
           <div className="landing-frame landing-final-layout">
             <div>
@@ -413,6 +417,7 @@ export function LandingExperience({
             >
               Documentation
             </InternalLink>
+            <a href="/#cloud">Pricing</a>
             <a href={`${REPO_URL}/releases`} target="_blank" rel="noreferrer">
               Releases
             </a>
@@ -428,6 +433,243 @@ export function LandingExperience({
         </div>
       </footer>
     </div>
+  );
+}
+
+const PRICING = {
+  monthly: { label: "$4", cadence: "per month" },
+  yearly: { label: "$40", cadence: "per year · 2 months free" },
+} as const;
+
+const FREE_FEATURES = [
+  "The full desktop app — every feature, forever",
+  "Unlimited tasks, lists & workspaces",
+  "All views: list, swimlanes, by tag",
+  "Recurring tasks & completion metrics",
+  "Local backups & restore",
+  "Self-hosted encrypted sync on your own server",
+];
+
+const PRO_FEATURES = [
+  "Hosted end-to-end encrypted sync — no server to run",
+  "Every device stays current, automatically",
+  "Off-site encrypted backup of every workspace",
+  "Priority support from the maintainers",
+  "Funds open, MIT-licensed development",
+];
+
+/**
+ * Stripe returns the browser to `/?checkout=success` after checkout. The
+ * banner renders at the top of the page rather than beside the plans: the
+ * reader arrives having already paid, so the confirmation should be the first
+ * thing on screen instead of a scroll away.
+ */
+function CheckoutSuccessBanner() {
+  const [returned] = useState(
+    () =>
+      new URLSearchParams(window.location.search).get("checkout") === "success",
+  );
+
+  useEffect(() => {
+    if (!returned) return;
+    // Drop the marker so reloading or sharing the URL does not replay a
+    // purchase confirmation that already happened.
+    const url = new URL(window.location.href);
+    url.searchParams.delete("checkout");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  }, [returned]);
+
+  if (!returned) return null;
+
+  return (
+    <div
+      role="status"
+      className="border-b border-success/30 bg-success/10 px-4 py-3.5"
+    >
+      <div className="landing-frame flex items-start gap-3">
+        <span className="mt-0.5 grid h-6 w-6 flex-shrink-0 place-items-center rounded-full bg-success text-success-foreground">
+          <Check aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={3} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">You’re on Dahoko Cloud.</p>
+          <p className="mt-0.5 text-sm leading-6 text-muted-foreground">
+            Head back to the Dahoko app — your plan updates automatically and
+            encrypted sync starts on the next pass. Manage or cancel anytime
+            from Settings → Sync.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CloudPricing({
+  onNavigate,
+}: {
+  onNavigate: (path: string) => void;
+}) {
+  const [interval, setInterval] = useState<"monthly" | "yearly">("yearly");
+  const price = PRICING[interval];
+
+  return (
+    <section id="cloud" className="landing-cloud border-t border-border/70">
+      <div className="landing-frame py-24">
+        <div className="mx-auto mb-12 max-w-2xl text-center">
+          <p className="landing-kicker">Dahoko Cloud</p>
+          <h2 className="font-brand text-3xl font-bold tracking-[-0.035em] sm:text-4xl">
+            Free where you work.
+            <br />
+            Paid only where we do.
+          </h2>
+          <p className="mt-4 text-base leading-7 text-muted-foreground">
+            The app is free and complete — no feature gates, no task limits.
+            Pro pays for the one thing that costs us money: running the
+            encrypted sync servers so you don’t have to.
+          </p>
+        </div>
+
+        <div className="mx-auto grid max-w-4xl gap-5 md:grid-cols-2">
+          <article className="flex flex-col rounded-2xl border border-border bg-card p-7 shadow-soft">
+            <div className="mb-5 flex items-center gap-3">
+              <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-muted text-foreground">
+                <Laptop aria-hidden="true" className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-lg font-bold tracking-tight">Free</h3>
+                <p className="text-xs text-muted-foreground">
+                  Local-first, yours forever
+                </p>
+              </div>
+            </div>
+            <p className="mb-5">
+              <span className="font-brand text-4xl font-bold tracking-tight">
+                $0
+              </span>
+              <span className="ml-2 text-sm text-muted-foreground">
+                no account required
+              </span>
+            </p>
+            <ul className="mb-7 space-y-2.5 text-sm leading-6">
+              {FREE_FEATURES.map((feature) => (
+                <li key={feature} className="flex gap-2.5">
+                  <Check
+                    aria-hidden="true"
+                    className="mt-1 h-4 w-4 flex-shrink-0 text-success"
+                  />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+            <Button
+              variant="secondary"
+              size="lg"
+              asChild
+              className="mt-auto min-h-12"
+            >
+              <a href={DOWNLOAD_URL} target="_blank" rel="noreferrer">
+                <Download aria-hidden="true" className="h-4 w-4" />
+                Download free
+              </a>
+            </Button>
+          </article>
+
+          <article className="relative flex flex-col rounded-2xl border border-primary-strong/35 bg-card p-7 shadow-[0_24px_60px_-30px_rgb(var(--brand-primary-depth)/0.55)]">
+            <span className="absolute -top-3 right-6 rounded-full border border-primary-strong/25 bg-primary px-3 py-1 text-[11px] font-bold text-primary-foreground">
+              Pro
+            </span>
+            <div className="mb-5 flex items-center gap-3">
+              <span className="grid h-10 w-10 place-items-center rounded-xl border border-primary-strong/25 bg-primary/20 text-primary-strong">
+                <Cloud aria-hidden="true" className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-lg font-bold tracking-tight">
+                  Dahoko Cloud
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Hosted encrypted sync
+                </p>
+              </div>
+            </div>
+
+            <div className="mb-5 flex items-end justify-between gap-3">
+              <p>
+                <span className="font-brand text-4xl font-bold tracking-tight">
+                  {price.label}
+                </span>
+                <span className="ml-2 text-sm text-muted-foreground">
+                  {price.cadence}
+                </span>
+              </p>
+              <div
+                role="group"
+                aria-label="Billing interval"
+                className="flex rounded-lg border border-border bg-muted/55 p-0.5 text-xs font-semibold"
+              >
+                {(["monthly", "yearly"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={interval === option}
+                    onClick={() => setInterval(option)}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 transition-colors",
+                      interval === option
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {option === "monthly" ? "Monthly" : "Yearly"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <ul className="mb-5 space-y-2.5 text-sm leading-6">
+              <li className="flex gap-2.5 font-semibold">
+                <Check
+                  aria-hidden="true"
+                  className="mt-1 h-4 w-4 flex-shrink-0 text-success"
+                />
+                Everything in Free, plus
+              </li>
+              {PRO_FEATURES.map((feature) => (
+                <li key={feature} className="flex gap-2.5">
+                  <Check
+                    aria-hidden="true"
+                    className="mt-1 h-4 w-4 flex-shrink-0 text-success"
+                  />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+            <p className="mb-6 flex items-start gap-2 rounded-xl border border-border/80 bg-muted/40 px-3.5 py-2.5 text-xs leading-5 text-muted-foreground">
+              <LockKeyhole
+                aria-hidden="true"
+                className="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
+              />
+              Cancel anytime. Your data is end-to-end encrypted and stays
+              downloadable even after a subscription lapses — never hostage.
+            </p>
+            <Button size="lg" asChild className="mt-auto min-h-12">
+              <a href={DOWNLOAD_URL} target="_blank" rel="noreferrer">
+                <Cloud aria-hidden="true" className="h-4 w-4" />
+                Get the app, upgrade inside
+              </a>
+            </Button>
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              Checkout opens from Settings → Sync — powered by Stripe.{" "}
+              <InternalLink
+                href="/docs/encrypted-sync"
+                onNavigate={onNavigate}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                How encryption works
+              </InternalLink>
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
   );
 }
 

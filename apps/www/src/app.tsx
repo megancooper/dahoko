@@ -37,6 +37,7 @@ import {
   DocsSearchDialog,
   InternalLink,
 } from "./docs";
+import { AccountPage } from "./account";
 import { LandingExperience } from "./landing";
 
 const REPO_URL = "https://github.com/megancooper/dahoko";
@@ -48,6 +49,9 @@ function normalizePathname(pathname: string) {
 }
 
 function getPageTitle(pathname: string) {
+  if (pathname === "/account") {
+    return "Account — dahoko";
+  }
   if (!pathname.startsWith("/docs")) {
     return "dahoko — private, local-first task management";
   }
@@ -126,6 +130,8 @@ export function App() {
               onOpenSearch={() => setSearchOpen(true)}
             />
           </>
+        ) : pathname === "/account" ? (
+          <AccountPage onNavigate={navigate} />
         ) : (
           <LandingExperience onNavigate={navigate} />
         )}
@@ -213,6 +219,19 @@ function SiteHeader({
           >
             Self-host
           </a>
+          <a
+            href="/#cloud"
+            className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+          >
+            Pricing
+          </a>
+          <InternalLink
+            href="/account"
+            onNavigate={onNavigate}
+            className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+          >
+            Account
+          </InternalLink>
         </nav>
 
         <div className="ml-auto flex items-center gap-1.5">
@@ -292,6 +311,19 @@ function SiteHeader({
             >
               Releases
             </a>
+            <a
+              href="/#cloud"
+              className="rounded-lg px-3 py-3 text-sm font-semibold hover:bg-muted"
+            >
+              Pricing
+            </a>
+            <InternalLink
+              href="/account"
+              onNavigate={onNavigate}
+              className="rounded-lg px-3 py-3 text-sm font-semibold hover:bg-muted"
+            >
+              Account
+            </InternalLink>
             <a
               href={REPO_URL}
               target="_blank"
