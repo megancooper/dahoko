@@ -254,6 +254,40 @@ The server does not terminate TLS. Your proxy or container platform must
 provide HTTPS. Keep `DAHOKO_ACCOUNT_HASH_KEY` in the platform's secret manager
 and back it up separately; changing it makes existing accounts undiscoverable.
 
+## Hosted deployment (sync.dahoko.com)
+
+The hosted service runs the GHCR image as a stateless Fly.io app
+(`apps/sync-server/fly.toml`); all data lives in Neon via `DATABASE_URL`.
+One-time setup:
+
+```bash
+fly apps create dahoko-sync
+fly secrets set -a dahoko-sync \
+  DAHOKO_ACCOUNT_HASH_KEY="$(openssl rand -hex 32)" \
+  DATABASE_URL="postgres://…neon…?sslmode=require" \
+  STRIPE_SECRET_KEY=sk_live_… \
+  STRIPE_WEBHOOK_SECRET=whsec_… \
+  STRIPE_PRICE_ID_PRO_MONTHLY=price_… \
+  STRIPE_PRICE_ID_PRO_YEARLY=price_… \
+  DAHOKO_BILLING_SUCCESS_URL="https://dahoko.com/account?checkout=success" \
+  DAHOKO_BILLING_CANCEL_URL="https://dahoko.com/account"
+fly deploy --config apps/sync-server/fly.toml \
+  --image ghcr.io/megancooper/dahoko-sync:latest
+fly certs add -a dahoko-sync sync.dahoko.com
+```
+
+Then in Cloudflare DNS for dahoko.com, add a **DNS-only** (grey-cloud)
+`CNAME sync → dahoko-sync.fly.dev`; Fly provisions the Let's Encrypt
+certificate automatically once the record resolves. Keep the record
+DNS-only — Fly terminates TLS itself.
+
+Continuous deploys: the container workflow redeploys Fly after every
+image publish once a `FLY_API_TOKEN` repository secret exists
+(`fly tokens create deploy -a dahoko-sync`). Afterwards set the GitHub
+repository variable `DAHOKO_SYNC_URL=https://sync.dahoko.com` so desktop
+releases and the website point at it, and add the Stripe webhook endpoint
+`https://sync.dahoko.com/v1/stripe/webhook`.
+
 ## Hosted Dahoko option
 
 Deploy the same container as a single instance with a persistent volume and
