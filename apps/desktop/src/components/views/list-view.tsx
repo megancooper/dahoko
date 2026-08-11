@@ -33,8 +33,9 @@ export function TaskRow({
         if (event.key === "Enter") onSelect(task.id);
       }}
       className={cn(
-        "flex animate-fade-in-up cursor-pointer items-center gap-3 rounded-md border border-transparent px-3 py-2 transition-colors hover:border-border/80 hover:bg-muted/60",
+        "group flex animate-fade-in-up cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2 transition-colors duration-150 hover:border-border/80 hover:bg-muted/60 hover:shadow-soft",
         selected && "border-primary/50 bg-primary/10",
+        task.completedAt && "opacity-70",
       )}
     >
       <TaskCheckbox task={task} onToggle={() => void toggleComplete(task.id)} />

@@ -205,6 +205,122 @@ export async function putRemoteSyncState(
   return parseRemoteState(value);
 }
 
+export type BillingSubscription =
+  | {
+      subscriptionId: string;
+      status: string;
+      priceId: string | null;
+      currentPeriodStart: number | null;
+      currentPeriodEnd: number | null;
+      cancelAtPeriodEnd: boolean;
+      paymentMethod: { brand: string | null; last4: string | null } | null;
+    }
+  | { status: "none" };
+
+export interface BillingState {
+  subscription: BillingSubscription;
+  syncRequiresSubscription: boolean;
+}
+
+function parseSubscription(value: unknown): BillingSubscription {
+  const source = responseRecord(value);
+  if (typeof source.status !== "string" || source.status.length > 40) {
+    return { status: "none" };
+  }
+  return source as unknown as BillingSubscription;
+}
+
+/**
+ * Returns the account's plan state, or null when the server has billing
+ * disabled (self-hosted servers respond 404 here).
+ */
+export async function getBillingState(
+  serverUrl: string,
+  token: string,
+): Promise<BillingState | null> {
+  const { response, value } = await fetchJson(`${serverUrl}/v1/billing`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new SyncApiError(
+      errorMessage(value, "The plan details could not be loaded."),
+      response.status,
+    );
+  }
+  const source = responseRecord(value);
+  return {
+    subscription: parseSubscription(source.subscription),
+    syncRequiresSubscription: source.syncRequiresSubscription === true,
+  };
+}
+
+/** Re-syncs plan state from Stripe (the eager post-checkout call). */
+export async function refreshBillingState(
+  serverUrl: string,
+  token: string,
+): Promise<BillingSubscription> {
+  const { response, value } = await fetchJson(`${serverUrl}/v1/billing/sync`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: "{}",
+  });
+  if (!response.ok) {
+    throw new SyncApiError(
+      errorMessage(value, "The plan details could not be refreshed."),
+      response.status,
+    );
+  }
+  return parseSubscription(responseRecord(value).subscription);
+}
+
+export async function createBillingCheckout(
+  serverUrl: string,
+  token: string,
+  email: string,
+  interval: "monthly" | "yearly",
+): Promise<string> {
+  const { response, value } = await fetchJson(
+    `${serverUrl}/v1/billing/checkout`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ email, interval }),
+    },
+  );
+  const url = responseRecord(value).url;
+  if (!response.ok || typeof url !== "string" || !url.startsWith("https://")) {
+    throw new SyncApiError(
+      errorMessage(value, "Checkout could not be started."),
+      response.status,
+    );
+  }
+  return url;
+}
+
+export async function createBillingPortal(
+  serverUrl: string,
+  token: string,
+): Promise<string> {
+  const { response, value } = await fetchJson(
+    `${serverUrl}/v1/billing/portal`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: "{}",
+    },
+  );
+  const url = responseRecord(value).url;
+  if (!response.ok || typeof url !== "string" || !url.startsWith("https://")) {
+    throw new SyncApiError(
+      errorMessage(value, "The billing portal could not be opened."),
+      response.status,
+    );
+  }
+  return url;
+}
+
 export async function logoutSyncAccount(
   serverUrl: string,
   token: string,

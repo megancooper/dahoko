@@ -2,15 +2,200 @@ import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   Cloud,
+  ExternalLink,
   LoaderCircle,
   LockKeyhole,
   Server,
   ShieldCheck,
+  Sparkles,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
 import { Button, Input } from "@dahoko/ui";
 import { useSync } from "@/state/sync";
+
+function openExternal(url: string) {
+  // Inside the Tauri webview window.open routes through the shell; in the
+  // browser build it opens a tab. Callers also surface the URL as a link
+  // in case popups are blocked.
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function BillingSection() {
+  const { billing, startCheckout, openBillingPortal, refreshBilling, syncNow } =
+    useSync();
+  const [busy, setBusy] = useState(false);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Eagerly re-sync plan state when the user returns from the browser
+  // checkout — usually before Stripe's webhook lands.
+  useEffect(() => {
+    if (!checkoutUrl) return;
+    const onFocus = () => {
+      void refreshBilling()
+        .then(() => syncNow().catch(() => {}))
+        .catch(() => {});
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [checkoutUrl, refreshBilling, syncNow]);
+
+  if (!billing) return null;
+  const { subscription } = billing;
+  const active =
+    subscription.status === "active" || subscription.status === "trialing";
+
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "The billing action could not be completed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-md border border-border bg-background p-2.5">
+      <div className="flex items-center gap-2 text-[12px] font-medium">
+        <Sparkles
+          aria-hidden="true"
+          className="h-3.5 w-3.5 text-muted-foreground"
+        />
+        Dahoko Cloud plan
+        <span
+          className={
+            active
+              ? "ml-auto rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10.5px] font-semibold text-success"
+              : "ml-auto rounded-full border border-border bg-muted px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground"
+          }
+        >
+          {active
+            ? subscription.status === "trialing"
+              ? "Pro · trial"
+              : "Pro"
+            : "Free"}
+        </span>
+      </div>
+
+      {active && subscription.status !== "none" ? (
+        <div className="mt-1.5 pl-[22px] text-[11.5px] leading-relaxed text-muted-foreground">
+          {"currentPeriodEnd" in subscription && subscription.currentPeriodEnd ? (
+            <span className="block">
+              {subscription.cancelAtPeriodEnd ? "Ends" : "Renews"}{" "}
+              {new Date(
+                subscription.currentPeriodEnd * 1_000,
+              ).toLocaleDateString()}
+              {"paymentMethod" in subscription && subscription.paymentMethod
+                ? ` · ${subscription.paymentMethod.brand ?? "card"} ····${subscription.paymentMethod.last4 ?? ""}`
+                : null}
+            </span>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-1.5 pl-[22px] text-[11.5px] leading-relaxed text-muted-foreground">
+          Upgrade to sync this account across devices on hosted,
+          end-to-end-encrypted Dahoko Cloud. $4/month or $40/year.
+        </p>
+      )}
+
+      <div className="mt-2.5 flex flex-wrap gap-2 pl-[22px]">
+        {active ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                openExternal(await openBillingPortal());
+              })
+            }
+          >
+            <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
+            Manage billing
+          </Button>
+        ) : (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const url = await startCheckout("monthly");
+                  setCheckoutUrl(url);
+                  openExternal(url);
+                })
+              }
+            >
+              Upgrade · $4/mo
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const url = await startCheckout("yearly");
+                  setCheckoutUrl(url);
+                  openExternal(url);
+                })
+              }
+            >
+              $40/yr · 2 months free
+            </Button>
+          </>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+          onClick={() =>
+            void run(async () => {
+              await refreshBilling();
+            })
+          }
+        >
+          Refresh
+        </Button>
+      </div>
+
+      {checkoutUrl && !active ? (
+        <p className="mt-2 pl-[22px] text-[11px] leading-relaxed text-muted-foreground">
+          Checkout opened in your browser. If it didn’t,{" "}
+          <a
+            href={checkoutUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2"
+          >
+            open it here
+          </a>
+          . Your plan refreshes automatically when you return.
+        </p>
+      ) : null}
+
+      {error ? (
+        <p
+          role="alert"
+          className="mt-2 pl-[22px] text-[11.5px] leading-relaxed text-destructive"
+        >
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 export function SyncSettings() {
   const {
@@ -123,6 +308,8 @@ export function SyncSettings() {
               ) : null}
             </span>
           </div>
+
+          <BillingSection />
 
           <div className="mt-3 flex flex-wrap gap-2">
             <Button

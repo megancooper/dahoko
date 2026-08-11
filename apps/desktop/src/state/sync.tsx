@@ -12,10 +12,15 @@ import { useStore } from "./store";
 import { createCoalescedRunner } from "./coalesced-runner";
 import {
   authenticateSyncAccount,
+  createBillingCheckout,
+  createBillingPortal,
   deleteSyncAccount,
+  getBillingState,
   logoutSyncAccount,
   normalizeSyncServerUrl,
+  refreshBillingState,
   SyncApiError,
+  type BillingState,
 } from "@/sync/api";
 import { deriveSyncKey, SyncCryptoError } from "@/sync/crypto";
 import { runEncryptedSync, snapshotsEqual } from "@/sync/engine";
@@ -65,10 +70,15 @@ interface SyncValue {
   savedConfig: SavedSyncConfig | null;
   hostedServerUrl: string;
   lastSyncedAt: string | null;
+  /** Plan state; null when the connected server has billing disabled. */
+  billing: BillingState | null;
   connect: (input: ConnectSyncInput) => Promise<void>;
   disconnect: () => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
   syncNow: () => Promise<void>;
+  startCheckout: (interval: "monthly" | "yearly") => Promise<string>;
+  openBillingPortal: () => Promise<string>;
+  refreshBilling: () => Promise<void>;
 }
 
 const SyncContext = createContext<SyncValue | null>(null);
@@ -137,6 +147,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(
     () => loadSavedSyncConfig()?.lastSyncedAt ?? null,
   );
+  const [billing, setBilling] = useState<BillingState | null>(null);
   const credentialsRef = useRef<ActiveCredentials | null>(null);
   const localStateRef = useRef<LocalSyncState | null>(null);
   const captureDataForSyncRef = useRef(captureDataForSync);
@@ -204,6 +215,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         credentialsRef.current = null;
         localStateRef.current = null;
         setAccount(null);
+        setBilling(null);
         setStatus("disconnected");
         setMessage("Your session expired. Sign in again.");
       } else {
@@ -251,11 +263,25 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         localStateRef.current = await loadLocalSyncState(accountKey);
         credentialsRef.current = credentials;
         setAccount(normalized);
+        try {
+          setBilling(
+            await getBillingState(normalized.serverUrl, auth.token),
+          );
+        } catch {
+          // Plan details are cosmetic here; sync reports its own errors.
+          setBilling(null);
+        }
         await syncNow();
       } catch (error) {
+        // A 402 means the session is valid but hosted sync needs a plan;
+        // keep the signed-in session so the user can upgrade from here.
+        if (error instanceof SyncApiError && error.status === 402) {
+          return;
+        }
         credentialsRef.current = null;
         localStateRef.current = null;
         setAccount(null);
+        setBilling(null);
         setStatus("error");
         setMessage(messageForError(error));
         if (token) {
@@ -272,6 +298,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     credentialsRef.current = null;
     localStateRef.current = null;
     setAccount(null);
+    setBilling(null);
     setStatus("disconnected");
     setMessage(
       "Disconnected. Your local data and encrypted server copy are unchanged.",
@@ -299,6 +326,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       credentialsRef.current = null;
       localStateRef.current = null;
       setAccount(null);
+      setBilling(null);
       setLastSyncedAt(null);
       const nextConfig: SavedSyncConfig = {
         serverUrl: credentials.serverUrl,
@@ -316,6 +344,40 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setMessage(messageForError(error));
       throw error;
     }
+  }, []);
+
+  const startCheckout = useCallback(
+    async (interval: "monthly" | "yearly") => {
+      const credentials = credentialsRef.current;
+      if (!credentials) throw new SyncApiError("Sign in before upgrading.");
+      return createBillingCheckout(
+        credentials.serverUrl,
+        credentials.token,
+        credentials.email,
+        interval,
+      );
+    },
+    [],
+  );
+
+  const openBillingPortal = useCallback(async () => {
+    const credentials = credentialsRef.current;
+    if (!credentials) throw new SyncApiError("Sign in first.");
+    return createBillingPortal(credentials.serverUrl, credentials.token);
+  }, []);
+
+  const refreshBilling = useCallback(async () => {
+    const credentials = credentialsRef.current;
+    if (!credentials) return;
+    const subscription = await refreshBillingState(
+      credentials.serverUrl,
+      credentials.token,
+    );
+    setBilling((current) =>
+      current
+        ? { ...current, subscription }
+        : { subscription, syncRequiresSubscription: true },
+    );
   }, []);
 
   useEffect(() => {
@@ -356,10 +418,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       savedConfig,
       hostedServerUrl: HOSTED_SYNC_SERVER_URL,
       lastSyncedAt,
+      billing,
       connect,
       disconnect,
       deleteAccount,
       syncNow,
+      startCheckout,
+      openBillingPortal,
+      refreshBilling,
     }),
     [
       status,
@@ -367,10 +433,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       account,
       savedConfig,
       lastSyncedAt,
+      billing,
       connect,
       disconnect,
       deleteAccount,
       syncNow,
+      startCheckout,
+      openBillingPortal,
+      refreshBilling,
     ],
   );
 

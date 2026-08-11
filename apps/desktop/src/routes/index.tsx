@@ -15,6 +15,7 @@ import { ListView } from "@/components/views/list-view";
 import { BoardView } from "@/components/views/board-view";
 import { TagView } from "@/components/views/tag-view";
 import { TaskDetail } from "@/components/task-detail";
+import { TaskComposer } from "@/components/task-composer";
 import { RecurringMetrics } from "@/components/recurring-metrics";
 
 export const Route = createFileRoute("/")({
@@ -29,6 +30,7 @@ function HomePage() {
     defaultViewForFilter(settings.defaultViews, "inbox"),
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
   const quickAddRef = useRef<HTMLInputElement>(null);
   const preferredView = defaultViewForFilter(
     settings.defaultViews,
@@ -52,7 +54,11 @@ function HomePage() {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "n") {
         event.preventDefault();
-        quickAddRef.current?.focus();
+        if (event.shiftKey) {
+          setComposerOpen(true);
+        } else {
+          quickAddRef.current?.focus();
+        }
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -99,7 +105,7 @@ function HomePage() {
                 },
               ]}
             />
-            <Button size="sm" onClick={() => quickAddRef.current?.focus()}>
+            <Button size="sm" onClick={() => setComposerOpen(true)}>
               <Plus className="h-4 w-4" /> New task
             </Button>
           </div>
@@ -141,6 +147,13 @@ function HomePage() {
             onClose={() => setSelectedId(null)}
           />
         ) : null}
+
+        <TaskComposer
+          key={filter.kind === "list" ? filter.listId : filter.kind}
+          open={composerOpen}
+          filter={filter}
+          onOpenChange={setComposerOpen}
+        />
       </main>
     </div>
   );
