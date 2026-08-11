@@ -1,11 +1,20 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { Download, Eye, LayoutGrid, Moon, Upload } from "lucide-react";
+import {
+  Cloud,
+  Database,
+  Download,
+  Eye,
+  LayoutGrid,
+  Moon,
+  RefreshCw,
+  SlidersHorizontal,
+  Upload,
+} from "lucide-react";
 import {
   Button,
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
   Select,
   SelectContent,
@@ -14,6 +23,7 @@ import {
   SelectValue,
   Switch,
   VersionBadge,
+  cn,
 } from "@dahoko/ui";
 import {
   useSettings,
@@ -37,6 +47,20 @@ type DataMessage = {
   tone: "neutral" | "success" | "error";
   text: string;
 } | null;
+
+type SectionId = "general" | "views" | "sync" | "data" | "updates";
+
+const SECTIONS: ReadonlyArray<{
+  id: SectionId;
+  label: string;
+  icon: typeof Moon;
+}> = [
+  { id: "general", label: "General", icon: SlidersHorizontal },
+  { id: "views", label: "Views", icon: LayoutGrid },
+  { id: "sync", label: "Sync & Cloud", icon: Cloud },
+  { id: "data", label: "Data", icon: Database },
+  { id: "updates", label: "Updates", icon: RefreshCw },
+];
 
 const DEFAULT_VIEW_SECTIONS: ReadonlyArray<{
   context: DefaultViewContext;
@@ -80,6 +104,23 @@ function SettingRow({
   );
 }
 
+function SectionHeading({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="mb-5">
+      <h3 className="text-[15px] font-semibold tracking-tight">{title}</h3>
+      <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+        {description}
+      </p>
+    </div>
+  );
+}
+
 export function SettingsDialog({
   open,
   onOpenChange,
@@ -103,6 +144,7 @@ export function SettingsDialog({
     restoreDataBackup,
   } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [section, setSection] = useState<SectionId>("general");
   const [pendingBackup, setPendingBackup] = useState<DahokoBackup | null>(null);
   const [dataBusy, setDataBusy] = useState(false);
   const [dataMessage, setDataMessage] = useState<DataMessage>(null);
@@ -234,281 +276,313 @@ export function SettingsDialog({
         onOpenChange(nextOpen);
       }}
     >
-      <DialogContent className="max-h-[calc(100dvh-3rem)] max-w-[520px] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>
-            Preferences are stored locally on this device.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-4 pt-1">
-          <SettingRow
-            icon={<Moon className={iconClass} />}
-            label="Theme"
-            hint="System follows your OS appearance"
+      <DialogContent className="h-[min(600px,calc(100dvh-3rem))] max-w-[860px] gap-0 overflow-hidden p-0">
+        <div className="grid h-full min-h-0 grid-cols-[200px_minmax(0,1fr)]">
+          {/* Left navigation */}
+          <nav
+            aria-label="Settings sections"
+            className="flex min-h-0 flex-col gap-0.5 border-r border-border bg-muted/35 p-3"
           >
-            <Select
-              value={settings.theme}
-              onValueChange={(value) =>
-                updateSettings({ theme: value as ThemePreference })
-              }
-            >
-              <SelectTrigger aria-label="Theme">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="system">System</SelectItem>
-                <SelectItem value="light">Light</SelectItem>
-                <SelectItem value="dark">Dark</SelectItem>
-              </SelectContent>
-            </Select>
-          </SettingRow>
-
-          <section
-            aria-labelledby="default-views-title"
-            className="rounded-lg border border-border bg-muted/35 p-3"
-          >
-            <div className="flex items-center gap-2">
-              <LayoutGrid className={iconClass} aria-hidden="true" />
-              <h3 id="default-views-title" className="text-[13px] font-medium">
-                Default views
-              </h3>
+            <DialogTitle className="px-2.5 pb-3 pt-1 text-[15px]">
+              Settings
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Preferences are stored locally on this device.
+            </DialogDescription>
+            {SECTIONS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                aria-current={section === id ? "page" : undefined}
+                onClick={() => setSection(id)}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
+                  section === id
+                    ? "bg-primary/20 text-primary-strong"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Icon aria-hidden="true" className="h-4 w-4 flex-shrink-0" />
+                {label}
+              </button>
+            ))}
+            <div className="mt-auto flex items-center gap-2 px-2.5 pb-1 pt-3">
+              <span className="text-[11px] text-muted-foreground">dahoko</span>
+              <VersionBadge version={version} />
             </div>
-            <p className="mt-1 pl-[22px] text-[11.5px] leading-relaxed text-muted-foreground">
-              Choose how each sidebar destination opens.
-            </p>
+          </nav>
 
-            <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5">
-              {DEFAULT_VIEW_SECTIONS.map(({ context, label }) => {
-                const triggerId = `default-view-${context}`;
-                return (
-                  <div key={context} className="min-w-0">
-                    <label
-                      htmlFor={triggerId}
-                      className="mb-1 block text-[11.5px] font-medium text-muted-foreground"
-                    >
-                      {label}
-                    </label>
+          {/* Content */}
+          <div className="min-h-0 overflow-y-auto p-6">
+            {section === "general" ? (
+              <>
+                <SectionHeading
+                  title="General"
+                  description="Appearance and behavior. Preferences are stored locally on this device."
+                />
+                <div className="flex flex-col gap-5">
+                  <SettingRow
+                    icon={<Moon className={iconClass} />}
+                    label="Theme"
+                    hint="System follows your OS appearance"
+                  >
                     <Select
-                      value={settings.defaultViews[context]}
+                      value={settings.theme}
                       onValueChange={(value) =>
-                        updateSettings({
-                          defaultViews: {
-                            ...settings.defaultViews,
-                            [context]: value as DefaultView,
-                          },
-                        })
+                        updateSettings({ theme: value as ThemePreference })
                       }
                     >
-                      <SelectTrigger id={triggerId}>
+                      <SelectTrigger aria-label="Theme">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="list">List</SelectItem>
-                        <SelectItem value="board">Swimlanes</SelectItem>
-                        <SelectItem value="tags">By tag</SelectItem>
+                        <SelectItem value="system">System</SelectItem>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+                  </SettingRow>
 
-          <SettingRow
-            icon={<Eye className={iconClass} />}
-            label="Completed in Inbox"
-            hint="Keep tasks finished today visible"
-          >
-            <div className="flex justify-end">
-              <Switch
-                aria-label="Show completed tasks in Inbox"
-                checked={settings.showCompletedInInbox}
-                onCheckedChange={(checked) =>
-                  updateSettings({ showCompletedInInbox: checked })
-                }
-              />
-            </div>
-          </SettingRow>
-
-          <div className="h-px bg-border" />
-
-          <SyncSettings />
-
-          <section
-            aria-labelledby="app-updates-title"
-            className="rounded-lg border border-border bg-muted/35 p-3"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3
-                    id="app-updates-title"
-                    className="text-[13px] font-medium"
+                  <SettingRow
+                    icon={<Eye className={iconClass} />}
+                    label="Completed in Inbox"
+                    hint="Keep tasks finished today visible"
                   >
-                    App updates
-                  </h3>
-                  <VersionBadge version={version} />
+                    <div className="flex justify-end">
+                      <Switch
+                        aria-label="Show completed tasks in Inbox"
+                        checked={settings.showCompletedInInbox}
+                        onCheckedChange={(checked) =>
+                          updateSettings({ showCompletedInInbox: checked })
+                        }
+                      />
+                    </div>
+                  </SettingRow>
                 </div>
-                <p
-                  aria-live="polite"
-                  className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground"
-                >
-                  {message}
-                </p>
-              </div>
+              </>
+            ) : null}
 
-              {status === "available" ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  className="flex-shrink-0"
-                  onClick={() => void installUpdate()}
-                >
-                  Update to v{availableVersion}
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="flex-shrink-0"
-                  disabled={busy || updaterUnavailable}
-                  onClick={() => void checkForUpdates()}
-                >
-                  {status === "checking"
-                    ? "Checking…"
-                    : status === "error"
-                      ? "Retry"
-                      : status === "downloading"
-                        ? progress === null
-                          ? "Downloading…"
-                          : `${progress}%`
-                        : status === "restarting"
-                          ? "Restarting…"
-                          : "Check now"}
-                </Button>
-              )}
-            </div>
-
-            {status === "downloading" ? (
-              <div
-                role="progressbar"
-                aria-label="Update download progress"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={progress ?? undefined}
-                className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary"
-              >
-                <div
-                  className="h-full rounded-full bg-primary-strong transition-[width] duration-150 ease-linear motion-reduce:transition-none"
-                  style={{ width: `${progress ?? 12}%` }}
+            {section === "views" ? (
+              <>
+                <SectionHeading
+                  title="Default views"
+                  description="Choose how each sidebar destination opens."
                 />
-              </div>
-            ) : null}
-          </section>
-
-          <section
-            aria-labelledby="data-title"
-            className="rounded-lg border border-border bg-muted/35 p-3"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <h3 id="data-title" className="text-[13px] font-medium">
-                  Your data
-                </h3>
-                <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
-                  Export a portable JSON backup or replace local data from a
-                  backup you trust. This applies to the current workspace.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={dataBusy}
-                onClick={exportData}
-              >
-                <Download aria-hidden="true" className="h-3.5 w-3.5" />
-                Export data
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={dataBusy}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload aria-hidden="true" className="h-3.5 w-3.5" />
-                {dataBusy ? "Reading…" : "Import data"}
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json,application/json"
-                onChange={(event) => void selectImport(event)}
-                className="sr-only"
-              />
-            </div>
-
-            {pendingBackup ? (
-              <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3">
-                <p className="text-[12px] font-medium">
-                  Replace this workspace’s data?
-                </p>
-                <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
-                  Valid backup from{" "}
-                  {new Date(pendingBackup.exportedAt).toLocaleString()} with{" "}
-                  {pendingBackup.data.tasks.length} tasks,{" "}
-                  {pendingBackup.data.lists.length} lists, and{" "}
-                  {pendingBackup.data.subtasks.length} subtasks. This cannot be
-                  undone unless you export this workspace first.
-                </p>
-                <div className="mt-3 flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={dataBusy}
-                    onClick={() => {
-                      setPendingBackup(null);
-                      setDataMessage(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="destructiveOutline"
-                    disabled={dataBusy}
-                    onClick={() => void confirmImport()}
-                  >
-                    {dataBusy ? "Importing…" : "Replace workspace"}
-                  </Button>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  {DEFAULT_VIEW_SECTIONS.map(({ context, label }) => {
+                    const triggerId = `default-view-${context}`;
+                    return (
+                      <div key={context} className="min-w-0">
+                        <label
+                          htmlFor={triggerId}
+                          className="mb-1 block text-[11.5px] font-medium text-muted-foreground"
+                        >
+                          {label}
+                        </label>
+                        <Select
+                          value={settings.defaultViews[context]}
+                          onValueChange={(value) =>
+                            updateSettings({
+                              defaultViews: {
+                                ...settings.defaultViews,
+                                [context]: value as DefaultView,
+                              },
+                            })
+                          }
+                        >
+                          <SelectTrigger id={triggerId}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="list">List</SelectItem>
+                            <SelectItem value="board">Swimlanes</SelectItem>
+                            <SelectItem value="tags">By tag</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
+              </>
             ) : null}
 
-            {dataMessage ? (
-              <p
-                role={dataMessage.tone === "error" ? "alert" : "status"}
-                className={
-                  dataMessage.tone === "error"
-                    ? "mt-3 text-[11.5px] text-destructive"
-                    : dataMessage.tone === "success"
-                      ? "mt-3 text-[11.5px] text-success"
-                      : "mt-3 text-[11.5px] text-muted-foreground"
-                }
-              >
-                {dataMessage.text}
-              </p>
+            {section === "sync" ? (
+              <>
+                <SectionHeading
+                  title="Sync & Cloud"
+                  description="End-to-end encrypted sync and your Dahoko Cloud plan."
+                />
+                <SyncSettings />
+              </>
             ) : null}
-          </section>
+
+            {section === "data" ? (
+              <>
+                <SectionHeading
+                  title="Your data"
+                  description="Export a portable JSON backup or replace local data from a backup you trust. This applies to the current workspace."
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={dataBusy}
+                    onClick={exportData}
+                  >
+                    <Download aria-hidden="true" className="h-3.5 w-3.5" />
+                    Export data
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={dataBusy}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload aria-hidden="true" className="h-3.5 w-3.5" />
+                    {dataBusy ? "Reading…" : "Import data"}
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={(event) => void selectImport(event)}
+                    className="sr-only"
+                  />
+                </div>
+
+                {pendingBackup ? (
+                  <div className="mt-4 rounded-md border border-warning/40 bg-warning/10 p-3">
+                    <p className="text-[12px] font-medium">
+                      Replace this workspace’s data?
+                    </p>
+                    <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+                      Valid backup from{" "}
+                      {new Date(pendingBackup.exportedAt).toLocaleString()} with{" "}
+                      {pendingBackup.data.tasks.length} tasks,{" "}
+                      {pendingBackup.data.lists.length} lists, and{" "}
+                      {pendingBackup.data.subtasks.length} subtasks. This cannot
+                      be undone unless you export this workspace first.
+                    </p>
+                    <div className="mt-3 flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={dataBusy}
+                        onClick={() => {
+                          setPendingBackup(null);
+                          setDataMessage(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructiveOutline"
+                        disabled={dataBusy}
+                        onClick={() => void confirmImport()}
+                      >
+                        {dataBusy ? "Importing…" : "Replace workspace"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {dataMessage ? (
+                  <p
+                    role={dataMessage.tone === "error" ? "alert" : "status"}
+                    className={
+                      dataMessage.tone === "error"
+                        ? "mt-4 text-[11.5px] text-destructive"
+                        : dataMessage.tone === "success"
+                          ? "mt-4 text-[11.5px] text-success"
+                          : "mt-4 text-[11.5px] text-muted-foreground"
+                    }
+                  >
+                    {dataMessage.text}
+                  </p>
+                ) : null}
+              </>
+            ) : null}
+
+            {section === "updates" ? (
+              <>
+                <SectionHeading
+                  title="App updates"
+                  description="Signed updates installed in place."
+                />
+                <div className="rounded-lg border border-border bg-muted/35 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-[13px] font-medium">
+                          Current version
+                        </h4>
+                        <VersionBadge version={version} />
+                      </div>
+                      <p
+                        aria-live="polite"
+                        className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground"
+                      >
+                        {message}
+                      </p>
+                    </div>
+
+                    {status === "available" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="flex-shrink-0"
+                        onClick={() => void installUpdate()}
+                      >
+                        Update to v{availableVersion}
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="flex-shrink-0"
+                        disabled={busy || updaterUnavailable}
+                        onClick={() => void checkForUpdates()}
+                      >
+                        {status === "checking"
+                          ? "Checking…"
+                          : status === "error"
+                            ? "Retry"
+                            : status === "downloading"
+                              ? progress === null
+                                ? "Downloading…"
+                                : `${progress}%`
+                              : status === "restarting"
+                                ? "Restarting…"
+                                : "Check now"}
+                      </Button>
+                    )}
+                  </div>
+
+                  {status === "downloading" ? (
+                    <div
+                      role="progressbar"
+                      aria-label="Update download progress"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={progress ?? undefined}
+                      className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary"
+                    >
+                      <div
+                        className="h-full rounded-full bg-primary-strong transition-[width] duration-150 ease-linear motion-reduce:transition-none"
+                        style={{ width: `${progress ?? 12}%` }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

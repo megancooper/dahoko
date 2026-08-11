@@ -294,7 +294,7 @@ export function SyncSettings() {
             aria-live="polite"
             className={
               status === "error"
-                ? "mt-2 flex items-start gap-2 text-[11.5px] leading-relaxed text-destructive"
+                ? "mt-3 flex items-start gap-2 rounded-md border border-destructive/35 bg-destructive/10 p-2.5 text-[11.5px] leading-relaxed text-destructive"
                 : "mt-2 flex items-start gap-2 text-[11.5px] leading-relaxed text-muted-foreground"
             }
           >
@@ -481,7 +481,7 @@ export function SyncSettings() {
             aria-live="polite"
             className={
               status === "error"
-                ? "mt-2 flex items-start gap-2 text-[11.5px] leading-relaxed text-destructive"
+                ? "mt-3 flex items-start gap-2 rounded-md border border-destructive/35 bg-destructive/10 p-2.5 text-[11.5px] leading-relaxed text-destructive"
                 : "mt-2 flex items-start gap-2 text-[11.5px] leading-relaxed text-muted-foreground"
             }
           >
@@ -496,6 +496,12 @@ export function SyncSettings() {
               disabled={busy}
               onClick={() => void submit("login")}
             >
+              {status === "connecting" ? (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                />
+              ) : null}
               {status === "connecting" ? "Connecting…" : "Sign in & sync"}
             </Button>
             <Button
@@ -505,6 +511,12 @@ export function SyncSettings() {
               disabled={busy}
               onClick={() => void submit("register")}
             >
+              {status === "connecting" ? (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                />
+              ) : null}
               Create account
             </Button>
           </div>

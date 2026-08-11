@@ -11,7 +11,9 @@ image = "ghcr.io/megancooper/dahoko-sync:latest"
 HOST = "0.0.0.0"
 PORT = "8787"
 DAHOKO_TRUST_PROXY = "true"
-DAHOKO_SYNC_ORIGINS = "tauri://localhost,http://tauri.localhost,https://dahoko.com"
+# Includes the desktop dev-server origins so `pnpm dev:desktop` can talk
+# to production sync; auth is bearer-token so allowing localhost is safe.
+DAHOKO_SYNC_ORIGINS = "tauri://localhost,http://tauri.localhost,https://dahoko.com,http://localhost:5103,http://127.0.0.1:5103,http://localhost:5102,http://127.0.0.1:5102"
 
 [http_service]
 internal_port = 8787
