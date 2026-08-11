@@ -1,0 +1,113 @@
+name: Publish Android
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Exact SemVer to build from its app-v tag
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact SemVer whose app-v tag should be published
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: app-v${{ inputs.version }}
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-read-only: false
+
+      - name: Stamp release version
+        working-directory: apps/android
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Version must be an exact stable SemVer such as 1.2.3."
+            exit 1
+          fi
+          IFS=. read -r MAJOR MINOR PATCH <<< "$RELEASE_VERSION"
+          # Monotonic versionCode: 1.4.2 -> 10402.
+          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          sed -i "s/versionCode = .*/versionCode = $VERSION_CODE/" app/build.gradle.kts
+          sed -i "s/versionName = .*/versionName = \"$RELEASE_VERSION\"/" app/build.gradle.kts
+          grep -E "versionCode|versionName" app/build.gradle.kts
+
+      - name: Build release APK
+        working-directory: apps/android
+        run: ./gradlew assembleRelease
+
+      - name: Sign APK
+        working-directory: apps/android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
+          ALIGNED=app/build/outputs/apk/release/app-release-aligned.apk
+          OUT="dahoko-android-v${RELEASE_VERSION}.apk"
+          "$BUILD_TOOLS/zipalign" -f -p 4 "$UNSIGNED" "$ALIGNED"
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "Signing with the release keystore."
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > release.keystore
+            "$BUILD_TOOLS/apksigner" sign \
+              --ks release.keystore \
+              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+              --out "$OUT" "$ALIGNED"
+            rm -f release.keystore
+          else
+            # Sideload-installable fallback until ANDROID_KEYSTORE_* secrets
+            # exist. Debug-signed builds cannot update a release-signed
+            # install (and vice versa), so set up the keystore before
+            # distributing widely.
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret; signing with a CI debug key."
+            keytool -genkeypair -v -keystore debug.keystore \
+              -storepass android -keypass android -alias androiddebugkey \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 10000
+            "$BUILD_TOOLS/apksigner" sign \
+              --ks debug.keystore --ks-pass pass:android \
+              --ks-key-alias androiddebugkey --key-pass pass:android \
+              --out "$OUT" "$ALIGNED"
+            rm -f debug.keystore
+          fi
+          "$BUILD_TOOLS/apksigner" verify "$OUT"
+
+      - name: Attach APK to the release
+        working-directory: apps/android
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "app-v${RELEASE_VERSION}" \
+            "dahoko-android-v${RELEASE_VERSION}.apk" \
+            --repo "$GITHUB_REPOSITORY" --clobber

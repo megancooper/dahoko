@@ -94,3 +94,13 @@ jobs:
     with:
       version: ${{ needs.release.outputs.version }}
     secrets: inherit
+
+  android:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-android.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+    secrets: inherit
