@@ -60,8 +60,7 @@ jobs:
             echo "No Infisical machine identity configured; expecting a DATABASE_URL secret instead."
             exit 0
           fi
-          curl -1sLf 'https://artifacts.infisical.com/setup.deb.sh' | sudo -E bash
-          sudo apt-get install -y infisical
+          npm install --global @infisical/cli
           INFISICAL_TOKEN=$(infisical login --method=universal-auth \
             --client-id="$INFISICAL_CLIENT_ID" \
             --client-secret="$INFISICAL_CLIENT_SECRET" \
