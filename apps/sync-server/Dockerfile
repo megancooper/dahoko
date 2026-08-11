@@ -11,6 +11,8 @@ RUN pnpm install --frozen-lockfile --filter @dahoko/sync-server...
 COPY apps/sync-server apps/sync-server
 COPY packages/typescript-config packages/typescript-config
 RUN pnpm --filter @dahoko/sync-server build
+# Self-contained folder with dist + production node_modules (pg driver).
+RUN pnpm --filter @dahoko/sync-server deploy --prod /deploy
 
 FROM node:22-bookworm-slim AS runtime
 
@@ -23,7 +25,9 @@ WORKDIR /app
 RUN useradd --system --uid 10001 --create-home dahoko \
   && mkdir -p /data \
   && chown dahoko:dahoko /data
-COPY --from=build --chown=dahoko:dahoko /app/apps/sync-server/dist ./dist
+COPY --from=build --chown=dahoko:dahoko /deploy/dist ./dist
+COPY --from=build --chown=dahoko:dahoko /deploy/node_modules ./node_modules
+COPY --from=build --chown=dahoko:dahoko /deploy/package.json ./package.json
 
 USER dahoko
 EXPOSE 8787

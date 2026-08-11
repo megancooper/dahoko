@@ -127,6 +127,128 @@ Environment variables:
 | `DAHOKO_SYNC_ORIGINS` | Tauri and local development origins | Exact comma-separated CORS allowlist |
 | `DAHOKO_TRUST_PROXY` | `false` | Trust `X-Forwarded-For`; enable only behind a proxy that replaces this header |
 | `DAHOKO_ACCOUNT_HASH_KEY` | required | Stable random secret used only to obscure account email lookup keys at rest |
+| `DATABASE_URL` | unset | Postgres connection string (e.g. Neon). Setting it switches storage from SQLite to Postgres |
+| `STRIPE_SECRET_KEY` | unset | Stripe API key. Setting it enables billing; leaving it unset runs the server with no billing at all |
+| `STRIPE_WEBHOOK_SECRET` | required with billing | Signing secret for `/v1/stripe/webhook` |
+| `STRIPE_PRICE_ID_PRO_MONTHLY` | required with billing | Price ID for the monthly Dahoko Cloud plan |
+| `STRIPE_PRICE_ID_PRO_YEARLY` | required with billing | Price ID for the yearly plan |
+| `DAHOKO_BILLING_SUCCESS_URL` | required with billing | Where Stripe returns the browser after checkout |
+| `DAHOKO_BILLING_CANCEL_URL` | required with billing | Where Stripe returns the browser after an abandoned checkout |
+| `DAHOKO_BILLING_REQUIRED` | `true` | Whether sync uploads require an active subscription. Downloads are never gated |
+
+The billing variables are all-or-nothing: setting `STRIPE_SECRET_KEY` without
+the rest fails startup rather than half-enabling checkout. A self-hosted server
+that never sets `STRIPE_SECRET_KEY` responds `404` to every billing route, and
+the desktop app hides its plan card in response.
+
+## Postgres storage (hosted)
+
+Self-hosting keeps the zero-setup SQLite default. The hosted service sets
+`DATABASE_URL` (a Neon Postgres connection string with `sslmode=require`),
+which switches every table — accounts, sessions, sync blobs, billing — to
+Postgres.
+
+Schema migrations are embedded in the server
+(`apps/sync-server/src/migrations.ts`, append-only) and apply three ways,
+all idempotent and serialized by a Postgres advisory lock:
+
+- **CI**: `.github/workflows/migrate-database.yml` runs
+  `pnpm --filter @dahoko/sync-server migrate` on every push to `main` that
+  touches migration files. It reads `DATABASE_URL` from one of two places
+  (repository Settings → Secrets and variables → Actions):
+  - an **Infisical machine identity** — add `INFISICAL_CLIENT_ID` and
+    `INFISICAL_CLIENT_SECRET` secrets (Infisical → Access Control →
+    Machine Identities, universal auth, read access to the project), and
+    optionally an `INFISICAL_ENV` repository *variable* for the
+    environment slug (defaults to `prod`); or
+  - a plain `DATABASE_URL` secret, which takes precedence when present.
+- **Server start**: a Postgres-backed server applies pending migrations
+  before listening, so a deploy that outruns CI still works.
+- **Manually**: `DATABASE_URL=... pnpm --filter @dahoko/sync-server migrate`.
+
+## Website account area
+
+`dahoko.com/account` lets a user sign in with their sync email and
+password to manage their subscription (upgrade, Stripe portal) and see
+what the server stores: revision and encrypted size. They can optionally
+enter their encryption passphrase to view workspaces and tasks —
+decryption happens entirely in the browser with the same
+PBKDF2/AES-256-GCM parameters as the app, and the passphrase is never
+transmitted. The build needs `VITE_DAHOKO_SYNC_URL` pointing at the sync
+server, and the server's `DAHOKO_SYNC_ORIGINS` must include the site
+origin (e.g. `https://dahoko.com`).
+
+## Billing
+
+Hosted Dahoko Cloud uses Stripe. The design deliberately avoids the "split
+brain" where purchase state lives partly in Stripe and partly in the app
+database:
+
+- A Stripe customer is created and bound to the sync account *before* any
+  checkout session exists, so a purchase can never arrive without a known owner.
+- One function, `syncStripeDataToDb(customerId)`, is the only writer of
+  subscription state. Both the post-checkout call from the app and every
+  webhook funnel into it.
+- Webhooks are trusted only for their signature and customer ID. Nothing else
+  in the event payload is read; the subscription is always re-fetched from
+  Stripe.
+
+Only sync *uploads* are gated on an active subscription. Downloads and account
+deletion keep working after a subscription lapses, so no one's data is held
+behind a payment.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/v1/billing` | Read the caller's plan state |
+| `POST` | `/v1/billing/sync` | Re-fetch plan state from Stripe (post-checkout) |
+| `POST` | `/v1/billing/checkout` | Create a Stripe Checkout session |
+| `POST` | `/v1/billing/portal` | Create a Stripe billing portal session |
+| `POST` | `/v1/stripe/webhook` | Signature-verified Stripe events |
+
+### Test billing locally
+
+Stripe accepts `http://localhost` return URLs in test mode, so the whole loop
+runs on this machine. Use **test-mode** keys and price IDs throughout.
+
+Set these in the development secret environment:
+
+```text
+DAHOKO_BILLING_SUCCESS_URL=http://localhost:5102/?checkout=success
+DAHOKO_BILLING_CANCEL_URL=http://localhost:5102/#cloud
+```
+
+In production these become `https://dahoko.com/?checkout=success` and
+`https://dahoko.com/#cloud`. The success URL is only where the browser lands;
+the app refreshes its own plan state when its window regains focus, so nothing
+about the purchase depends on that page loading.
+
+Leave `DAHOKO_BILLING_REQUIRED` unset so the upload gate stays on and the
+paywall is actually exercised.
+
+Run three processes:
+
+```bash
+# 1. Forward Stripe events and print a local signing secret
+pnpm stripe:listen
+
+# 2. Sync server, with the webhook secret that `stripe listen` just printed
+STRIPE_WEBHOOK_SECRET=whsec_from_stripe_listen pnpm dev:sync
+
+# 3. Desktop app
+pnpm dev:desktop
+```
+
+`stripe listen` mints its own signing secret that differs from the dashboard
+endpoint secret. The forwarded events fail verification unless the server uses
+the printed value, so override it locally rather than storing it as the shared
+secret.
+
+In the app, open Settings → Sync, enter `http://127.0.0.1:8787`, and create an
+account. Sync reports that uploads need a plan and the Dahoko Cloud card offers
+both intervals. Choose one, pay with test card `4242 4242 4242 4242` and any
+future expiry, then return to the app window: the plan refreshes on focus and
+sync succeeds. "Manage billing" opens the Stripe portal, where cancelling
+should flip the app back to Free on the next refresh.
 
 The server does not terminate TLS. Your proxy or container platform must
 provide HTTPS. Keep `DAHOKO_ACCOUNT_HASH_KEY` in the platform's secret manager

@@ -7,7 +7,20 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { DatabaseSync } from "node:sqlite";
+import {
+  Billing,
+  BillingError,
+  subscriptionIsActive,
+  type BillingOptions,
+  type PlanInterval,
+} from "./billing.js";
+import {
+  SqliteStore,
+  type AccountRow,
+  type AuthenticatedAccount,
+  type EncryptedBlob,
+  type Store,
+} from "./store.js";
 
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1_000;
 const AUTH_WINDOW_MS = 15 * 60 * 1_000;
@@ -21,7 +34,10 @@ const MAX_RATE_LIMIT_KEYS = 20_000;
 type JsonObject = Record<string, unknown>;
 
 export interface SyncServerOptions {
+  /** SQLite path used when no explicit store is provided. */
   databasePath: string;
+  /** Overrides SQLite — e.g. a PgStore pointed at DATABASE_URL. */
+  store?: Store;
   allowedOrigins: string[];
   accountHashKey: string;
   trustProxy?: boolean;
@@ -29,6 +45,8 @@ export interface SyncServerOptions {
   sessionDurationMs?: number;
   scryptCost?: number;
   now?: () => number;
+  /** Stripe billing for hosted Dahoko Cloud; omit to run without billing. */
+  billing?: BillingOptions | null;
 }
 
 export interface SyncServer {
@@ -36,26 +54,6 @@ export interface SyncServer {
   close: () => Promise<void>;
 }
 
-interface AccountRow {
-  id: string;
-  password_hash: string;
-  encryption_salt: string;
-}
-
-interface AuthenticatedAccount {
-  id: string;
-  encryptionSalt: string;
-}
-
-interface EncryptedBlob {
-  version: 1;
-  algorithm: "AES-256-GCM";
-  kdf: "PBKDF2-SHA256";
-  iterations: 600_000;
-  salt: string;
-  nonce: string;
-  ciphertext: string;
-}
 
 class HttpError extends Error {
   constructor(
@@ -101,179 +99,6 @@ class RateLimiter {
   }
 }
 
-class SyncStore {
-  private readonly database: DatabaseSync;
-
-  constructor(path: string) {
-    this.database = new DatabaseSync(path);
-    this.database.exec("PRAGMA foreign_keys = ON");
-    this.database.exec("PRAGMA busy_timeout = 5000");
-    if (path !== ":memory:") this.database.exec("PRAGMA journal_mode = WAL");
-    this.database.exec(`
-      CREATE TABLE IF NOT EXISTS accounts (
-        id TEXT PRIMARY KEY,
-        email_hash TEXT NOT NULL UNIQUE,
-        password_hash TEXT NOT NULL,
-        encryption_salt TEXT NOT NULL,
-        revision INTEGER NOT NULL DEFAULT 0,
-        blob_json TEXT,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS sessions (
-        token_hash TEXT PRIMARY KEY,
-        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-        expires_at INTEGER NOT NULL,
-        created_at INTEGER NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS sessions_account_id
-        ON sessions(account_id);
-      CREATE INDEX IF NOT EXISTS sessions_expires_at
-        ON sessions(expires_at);
-    `);
-  }
-
-  close() {
-    this.database.close();
-  }
-
-  createAccount(
-    emailHash: string,
-    passwordHash: string,
-    encryptionSalt: string,
-    now: number,
-  ): string | null {
-    const id = randomUUID();
-    try {
-      this.database
-        .prepare(
-          `INSERT INTO accounts (
-             id, email_hash, password_hash, encryption_salt, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?)`,
-        )
-        .run(id, emailHash, passwordHash, encryptionSalt, now, now);
-      return id;
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.includes("UNIQUE constraint failed: accounts.email_hash")
-      ) {
-        return null;
-      }
-      throw error;
-    }
-  }
-
-  accountByEmailHash(emailHash: string): AccountRow | null {
-    return (
-      (this.database
-        .prepare(
-          "SELECT id, password_hash, encryption_salt FROM accounts WHERE email_hash = ?",
-        )
-        .get(emailHash) as AccountRow | undefined) ?? null
-    );
-  }
-
-  accountById(accountId: string): AccountRow | null {
-    return (
-      (this.database
-        .prepare(
-          "SELECT id, password_hash, encryption_salt FROM accounts WHERE id = ?",
-        )
-        .get(accountId) as AccountRow | undefined) ?? null
-    );
-  }
-
-  deleteAccount(accountId: string) {
-    this.database.prepare("DELETE FROM accounts WHERE id = ?").run(accountId);
-  }
-
-  createSession(
-    accountId: string,
-    tokenHash: string,
-    expiresAt: number,
-    now: number,
-  ) {
-    this.database
-      .prepare(
-        "INSERT INTO sessions (token_hash, account_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
-      )
-      .run(tokenHash, accountId, expiresAt, now);
-  }
-
-  accountForSession(
-    tokenHash: string,
-    now: number,
-  ): AuthenticatedAccount | null {
-    const row = this.database
-      .prepare(
-        `SELECT accounts.id, accounts.encryption_salt, sessions.expires_at
-         FROM sessions
-         JOIN accounts ON accounts.id = sessions.account_id
-         WHERE sessions.token_hash = ?`,
-      )
-      .get(tokenHash) as
-      | { id: string; encryption_salt: string; expires_at: number }
-      | undefined;
-    if (!row) return null;
-    if (row.expires_at <= now) {
-      this.deleteSession(tokenHash);
-      return null;
-    }
-    return { id: row.id, encryptionSalt: row.encryption_salt };
-  }
-
-  deleteSession(tokenHash: string) {
-    this.database
-      .prepare("DELETE FROM sessions WHERE token_hash = ?")
-      .run(tokenHash);
-  }
-
-  cleanupSessions(now: number) {
-    this.database
-      .prepare("DELETE FROM sessions WHERE expires_at <= ?")
-      .run(now);
-  }
-
-  syncState(accountId: string): { revision: number; blob: EncryptedBlob | null } {
-    const row = this.database
-      .prepare("SELECT revision, blob_json FROM accounts WHERE id = ?")
-      .get(accountId) as
-      | { revision: number; blob_json: string | null }
-      | undefined;
-    if (!row) throw new HttpError(401, "Authentication is required.");
-    return {
-      revision: row.revision,
-      blob: row.blob_json
-        ? (JSON.parse(row.blob_json) as EncryptedBlob)
-        : null,
-    };
-  }
-
-  compareAndSwapSync(
-    accountId: string,
-    baseRevision: number,
-    blob: EncryptedBlob,
-    now: number,
-  ): { saved: boolean; state: { revision: number; blob: EncryptedBlob | null } } {
-    this.database.exec("BEGIN IMMEDIATE");
-    try {
-      const result = this.database
-        .prepare(
-          `UPDATE accounts
-           SET blob_json = ?, revision = revision + 1, updated_at = ?
-           WHERE id = ? AND revision = ?`,
-        )
-        .run(JSON.stringify(blob), now, accountId, baseRevision);
-      const state = this.syncState(accountId);
-      this.database.exec("COMMIT");
-      return { saved: Number(result.changes) === 1, state };
-    } catch (error) {
-      this.database.exec("ROLLBACK");
-      throw error;
-    }
-  }
-}
 
 function normalizeEmail(value: unknown): string {
   if (typeof value !== "string") {
@@ -429,6 +254,21 @@ async function readJsonBody(
   }
 }
 
+async function readRawBody(
+  request: IncomingMessage,
+  maxBytes: number,
+): Promise<string> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const rawChunk of request) {
+    const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk);
+    size += chunk.byteLength;
+    if (size > maxBytes) throw new HttpError(413, "The request is too large.");
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 function validBase64(value: string): boolean {
   return /^[A-Za-z0-9+/]+={0,2}$/.test(value);
 }
@@ -512,7 +352,10 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
   const sessionDuration = options.sessionDurationMs ?? SESSION_DURATION_MS;
   const passwordCost = options.scryptCost ?? 32_768;
   const allowedOrigins = new Set(options.allowedOrigins);
-  const store = new SyncStore(options.databasePath);
+  const store = options.store ?? new SqliteStore(options.databasePath);
+  const billing = options.billing
+    ? new Billing({ ...options.billing, now: options.billing.now ?? now }, store)
+    : null;
   const rateLimiter = new RateLimiter(
     AUTH_ATTEMPTS_PER_WINDOW,
     AUTH_WINDOW_MS,
@@ -524,9 +367,11 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
   );
   let requestCount = 0;
 
-  const authenticate = (request: IncomingMessage): AuthenticatedAccount => {
+  const authenticate = async (
+    request: IncomingMessage,
+  ): Promise<AuthenticatedAccount> => {
     const token = bearerToken(request);
-    const account = store.accountForSession(sha256(token), now());
+    const account = await store.accountForSession(sha256(token), now());
     if (!account) throw new HttpError(401, "Authentication is required.");
     return account;
   };
@@ -546,7 +391,81 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
         return;
       }
       if (request.method === "GET" && path === "/health") {
-        writeJson(response, 200, { status: "ok", protocol: 1 });
+        writeJson(response, 200, {
+          status: "ok",
+          protocol: 1,
+          billing: billing !== null,
+        });
+        return;
+      }
+
+      // Stripe calls this endpoint directly; it is authenticated by the
+      // webhook signature instead of a bearer token.
+      if (request.method === "POST" && path === "/v1/stripe/webhook") {
+        if (!billing) throw new HttpError(404, "Not found.");
+        const signature = request.headers["stripe-signature"];
+        if (typeof signature !== "string") {
+          throw new HttpError(400, "The webhook signature is missing.");
+        }
+        const payload = await readRawBody(request, 256 * 1024);
+        billing.verifyWebhookSignature(payload, signature);
+        try {
+          await billing.processWebhookEvent(payload);
+        } catch (error) {
+          // Non-signature failures are logged but acknowledged so Stripe
+          // retries on transient errors without flagging the endpoint.
+          console.error(
+            JSON.stringify({ event: "stripe_webhook_error", requestId }),
+          );
+          if (error instanceof BillingError && error.status < 500) {
+            throw error;
+          }
+        }
+        writeJson(response, 200, { received: true });
+        return;
+      }
+
+      if (path === "/v1/billing" && request.method === "GET") {
+        if (!billing) throw new HttpError(404, "Not found.");
+        const account = await authenticate(request);
+        writeJson(response, 200, {
+          subscription: await billing.subscriptionForAccount(account.id),
+          syncRequiresSubscription: billing.requiresSubscriptionForSync,
+        });
+        return;
+      }
+
+      if (path === "/v1/billing/sync" && request.method === "POST") {
+        if (!billing) throw new HttpError(404, "Not found.");
+        const account = await authenticate(request);
+        writeJson(response, 200, {
+          subscription: await billing.syncForAccount(account.id),
+        });
+        return;
+      }
+
+      if (path === "/v1/billing/checkout" && request.method === "POST") {
+        if (!billing) throw new HttpError(404, "Not found.");
+        const account = await authenticate(request);
+        const body = await readJsonBody(request, 8_192);
+        // The server stores only an HMAC of the account email; the client
+        // re-sends it here so Stripe can issue receipts. It is passed
+        // through to Stripe and never persisted locally.
+        const email = normalizeEmail(body.email);
+        const interval: PlanInterval =
+          body.interval === "yearly" ? "yearly" : "monthly";
+        writeJson(
+          response,
+          200,
+          await billing.createCheckoutSession(account.id, email, interval),
+        );
+        return;
+      }
+
+      if (path === "/v1/billing/portal" && request.method === "POST") {
+        if (!billing) throw new HttpError(404, "Not found.");
+        const account = await authenticate(request);
+        writeJson(response, 200, await billing.createPortalSession(account.id));
         return;
       }
       if (
@@ -569,7 +488,7 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
         if (path.endsWith("/register")) {
           const passwordHash = await hashPassword(password, passwordCost);
           const encryptionSalt = randomBytes(32).toString("base64");
-          const accountId = store.createAccount(
+          const accountId = await store.createAccount(
             emailHash,
             passwordHash,
             encryptionSalt,
@@ -584,7 +503,7 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
             encryption_salt: encryptionSalt,
           };
         } else {
-          account = store.accountByEmailHash(emailHash);
+          account = await store.accountByEmailHash(emailHash);
           const encodedHash =
             account?.password_hash ?? (await dummyPasswordHashPromise);
           if (!(await verifyPassword(password, encodedHash)) || !account) {
@@ -593,7 +512,7 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
         }
 
         const token = randomBytes(32).toString("base64url");
-        store.createSession(
+        await store.createSession(
           account.id,
           sha256(token),
           now() + sessionDuration,
@@ -608,13 +527,13 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
 
       if (request.method === "POST" && path === "/v1/auth/logout") {
         const token = bearerToken(request);
-        store.deleteSession(sha256(token));
+        await store.deleteSession(sha256(token));
         writeJson(response, 200, { ok: true });
         return;
       }
 
       if (request.method === "DELETE" && path === "/v1/account") {
-        const account = authenticate(request);
+        const account = await authenticate(request);
         const body = await readJsonBody(request, 8_192);
         const password = validatePassword(body.password);
         const address = clientAddress(request, options.trustProxy ?? false);
@@ -624,26 +543,39 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
         ) {
           throw new HttpError(429, "Too many attempts. Try again later.");
         }
-        const storedAccount = store.accountById(account.id);
+        const storedAccount = await store.accountById(account.id);
         if (
           !storedAccount ||
           !(await verifyPassword(password, storedAccount.password_hash))
         ) {
           throw new HttpError(401, "The account password is incorrect.");
         }
-        store.deleteAccount(account.id);
+        await store.deleteAccount(account.id);
         writeJson(response, 200, { ok: true });
         return;
       }
 
       if (request.method === "GET" && path === "/v1/sync") {
-        const account = authenticate(request);
-        writeJson(response, 200, store.syncState(account.id));
+        const account = await authenticate(request);
+        const state = await store.syncState(account.id);
+        if (!state) throw new HttpError(401, "Authentication is required.");
+        writeJson(response, 200, state);
         return;
       }
 
       if (request.method === "PUT" && path === "/v1/sync") {
-        const account = authenticate(request);
+        const account = await authenticate(request);
+        // Uploads are gated on Dahoko Cloud Pro; downloads stay open so a
+        // lapsed subscription never holds anyone's data hostage.
+        if (
+          billing?.requiresSubscriptionForSync &&
+          !subscriptionIsActive(await billing.subscriptionForAccount(account.id))
+        ) {
+          throw new HttpError(
+            402,
+            "Hosted sync uploads need an active Dahoko Cloud subscription. Your data stays downloadable.",
+          );
+        }
         const body = await readJsonBody(
           request,
           Math.ceil((maxBlobBytes * 4) / 3) + 32_000,
@@ -659,7 +591,7 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
           account.encryptionSalt,
           maxBlobBytes,
         );
-        const result = store.compareAndSwapSync(
+        const result = await store.compareAndSwapSync(
           account.id,
           body.baseRevision as number,
           blob,
@@ -671,7 +603,7 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
 
       throw new HttpError(404, "Not found.");
     } catch (error) {
-      if (error instanceof HttpError) {
+      if (error instanceof HttpError || error instanceof BillingError) {
         writeJson(response, error.status, { error: error.message });
       } else {
         console.error(
@@ -688,7 +620,7 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
       }
     } finally {
       requestCount += 1;
-      if (requestCount % 1_000 === 0) store.cleanupSessions(now());
+      if (requestCount % 1_000 === 0) void store.cleanupSessions(now()).catch(() => {});
     }
   });
 
@@ -697,9 +629,10 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => {
-          store.close();
-          if (error) reject(error);
-          else resolve();
+          void store.close().then(
+            () => (error ? reject(error) : resolve()),
+            (closeError) => reject(error ?? closeError),
+          );
         });
       }),
   };

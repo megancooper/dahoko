@@ -1,0 +1,89 @@
+name: Database migrations
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/migrate-database.yml"
+      - "apps/sync-server/src/migrations.ts"
+      - "apps/sync-server/src/migrate-cli.ts"
+      - "apps/sync-server/src/pg-store.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialize runs so two merges cannot race migrations; the advisory lock in
+# the runner is the second line of defense.
+concurrency:
+  group: migrate-database
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'megancooper' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
+        with:
+          version: 8.15.6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22.22.2
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter @dahoko/sync-server...
+
+      # DATABASE_URL can come from either place:
+      #  - an Infisical machine identity (INFISICAL_CLIENT_ID +
+      #    INFISICAL_CLIENT_SECRET repository secrets), which keeps
+      #    Infisical the single source of truth; or
+      #  - a plain DATABASE_URL repository secret as the simple fallback.
+      - name: Resolve DATABASE_URL from Infisical
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
+          INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID || '59b3e1c1-4338-4718-8485-79823cb3aca5' }}
+          INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
+        run: |
+          if [ -n "$DIRECT_DATABASE_URL" ]; then
+            echo "Using the DATABASE_URL repository secret directly."
+            exit 0
+          fi
+          if [ -z "$INFISICAL_CLIENT_ID" ] || [ -z "$INFISICAL_CLIENT_SECRET" ]; then
+            echo "No Infisical machine identity configured; expecting a DATABASE_URL secret instead."
+            exit 0
+          fi
+          curl -1sLf 'https://artifacts.infisical.com/setup.deb.sh' | sudo -E bash
+          sudo apt-get install -y infisical
+          INFISICAL_TOKEN=$(infisical login --method=universal-auth \
+            --client-id="$INFISICAL_CLIENT_ID" \
+            --client-secret="$INFISICAL_CLIENT_SECRET" \
+            --silent --plain)
+          export INFISICAL_TOKEN
+          DATABASE_URL=$(infisical secrets get DATABASE_URL \
+            --projectId "$INFISICAL_PROJECT_ID" \
+            --env "$INFISICAL_ENV" --plain)
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL was not found in Infisical env '$INFISICAL_ENV'."
+            exit 1
+          fi
+          echo "::add-mask::$DATABASE_URL"
+          echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Apply pending migrations
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          export DATABASE_URL="${DATABASE_URL:-$DIRECT_DATABASE_URL}"
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Provide DATABASE_URL either as a repository secret, or via an Infisical machine identity (INFISICAL_CLIENT_ID + INFISICAL_CLIENT_SECRET secrets)."
+            exit 1
+          fi
+          pnpm --filter @dahoko/sync-server migrate

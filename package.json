@@ -5,6 +5,8 @@
     "dev": "turbo run dev --filter=@dahoko/desktop --filter=@dahoko/www",
     "dev:desktop": "turbo run dev --filter=@dahoko/desktop",
     "dev:www": "turbo run dev --filter=@dahoko/www",
+    "dev:sync": "infisical run -- pnpm --filter @dahoko/sync-server dev",
+    "stripe:listen": "stripe listen --forward-to localhost:8787/v1/stripe/webhook",
     "configure:pages-domain": "node scripts/configure-pages-domain.mjs",
     "tauri": "pnpm --filter @dahoko/desktop tauri",
     "build": "turbo run build",
