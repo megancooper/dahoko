@@ -89,15 +89,55 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
 
-      # Deploys the freshly published image; a no-op until the
-      # FLY_API_TOKEN secret exists.
-      - name: Deploy to Fly.io
+      # Syncs the server's runtime secrets from Infisical into Fly (staged,
+      # so they apply atomically with the deploy), then deploys the freshly
+      # published image. A no-op until the FLY_API_TOKEN secret exists.
+      - name: Sync secrets from Infisical and deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
+          INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID || '59b3e1c1-4338-4718-8485-79823cb3aca5' }}
+          INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
         working-directory: apps/sync-server
         run: |
+          set -euo pipefail
           if [ -z "$FLY_API_TOKEN" ]; then
             echo "No FLY_API_TOKEN secret; skipping deploy."
             exit 0
           fi
+          if [ -z "$INFISICAL_CLIENT_ID" ] || [ -z "$INFISICAL_CLIENT_SECRET" ]; then
+            echo "::error::INFISICAL_CLIENT_ID and INFISICAL_CLIENT_SECRET secrets are required to sync Fly secrets."
+            exit 1
+          fi
+          npm install --global @infisical/cli
+          INFISICAL_TOKEN=$(infisical login --method=universal-auth \
+            --client-id="$INFISICAL_CLIENT_ID" \
+            --client-secret="$INFISICAL_CLIENT_SECRET" \
+            --silent --plain)
+          export INFISICAL_TOKEN
+
+          KEYS="DAHOKO_ACCOUNT_HASH_KEY DATABASE_URL STRIPE_SECRET_KEY \
+            STRIPE_WEBHOOK_SECRET STRIPE_PRICE_ID_PRO_MONTHLY \
+            STRIPE_PRICE_ID_PRO_YEARLY DAHOKO_BILLING_SUCCESS_URL \
+            DAHOKO_BILLING_CANCEL_URL"
+          : > .fly-secrets
+          missing=""
+          for key in $KEYS; do
+            value=$(infisical secrets get "$key" \
+              --projectId "$INFISICAL_PROJECT_ID" \
+              --env "$INFISICAL_ENV" --plain 2>/dev/null || true)
+            if [ -z "$value" ]; then
+              missing="$missing $key"
+            else
+              printf '%s=%s\n' "$key" "$value" >> .fly-secrets
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing in Infisical env '$INFISICAL_ENV':$missing"
+            rm -f .fly-secrets
+            exit 1
+          fi
+          flyctl secrets import --stage < .fly-secrets
+          rm -f .fly-secrets
           flyctl deploy --image "ghcr.io/${GITHUB_REPOSITORY_OWNER}/dahoko-sync:latest"

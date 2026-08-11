@@ -258,22 +258,25 @@ and back it up separately; changing it makes existing accounts undiscoverable.
 
 The hosted service runs the GHCR image as a stateless Fly.io app
 (`apps/sync-server/fly.toml`); all data lives in Neon via `DATABASE_URL`.
+Runtime secrets live in **Infisical** (env slug from the `INFISICAL_ENV`
+repository variable, `prod` by default) and are synced into Fly by CI on
+every deploy — `fly secrets set` is never run by hand. The deploy job
+requires these keys in that Infisical environment and fails listing any
+that are missing:
+
+`DAHOKO_ACCOUNT_HASH_KEY`, `DATABASE_URL`, `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PRO_MONTHLY`,
+`STRIPE_PRICE_ID_PRO_YEARLY`, `DAHOKO_BILLING_SUCCESS_URL`,
+`DAHOKO_BILLING_CANCEL_URL`
+
 One-time setup:
 
 ```bash
 fly apps create dahoko-sync
-fly secrets set -a dahoko-sync \
-  DAHOKO_ACCOUNT_HASH_KEY="$(openssl rand -hex 32)" \
-  DATABASE_URL="postgres://…neon…?sslmode=require" \
-  STRIPE_SECRET_KEY=sk_live_… \
-  STRIPE_WEBHOOK_SECRET=whsec_… \
-  STRIPE_PRICE_ID_PRO_MONTHLY=price_… \
-  STRIPE_PRICE_ID_PRO_YEARLY=price_… \
-  DAHOKO_BILLING_SUCCESS_URL="https://dahoko.com/account?checkout=success" \
-  DAHOKO_BILLING_CANCEL_URL="https://dahoko.com/account"
-fly deploy --config apps/sync-server/fly.toml \
-  --image ghcr.io/megancooper/dahoko-sync:latest
+fly ips allocate-v4 --shared -a dahoko-sync
+fly ips allocate-v6 -a dahoko-sync
 fly certs add -a dahoko-sync sync.dahoko.com
+fly tokens create deploy -a dahoko-sync | gh secret set FLY_API_TOKEN
 ```
 
 Then in Cloudflare DNS for dahoko.com, add a **DNS-only** (grey-cloud)
@@ -281,12 +284,12 @@ Then in Cloudflare DNS for dahoko.com, add a **DNS-only** (grey-cloud)
 certificate automatically once the record resolves. Keep the record
 DNS-only — Fly terminates TLS itself.
 
-Continuous deploys: the container workflow redeploys Fly after every
-image publish once a `FLY_API_TOKEN` repository secret exists
-(`fly tokens create deploy -a dahoko-sync`). Afterwards set the GitHub
-repository variable `DAHOKO_SYNC_URL=https://sync.dahoko.com` so desktop
-releases and the website point at it, and add the Stripe webhook endpoint
-`https://sync.dahoko.com/v1/stripe/webhook`.
+Continuous deploys: after every image publish, the container workflow
+pulls the key list above from Infisical, stages them as Fly secrets, and
+deploys — so rotating a secret in Infisical takes effect on the next
+deploy. The `DAHOKO_SYNC_URL=https://sync.dahoko.com` repository variable
+points desktop releases and the website at the API; the Stripe webhook
+endpoint is `https://sync.dahoko.com/v1/stripe/webhook`.
 
 ## Hosted Dahoko option
 
