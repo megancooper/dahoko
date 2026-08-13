@@ -516,7 +516,7 @@ function CloudPricing({
       <div className="landing-frame py-24">
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <p className="landing-kicker">Dahoko Cloud</p>
-          <h2 className="font-brand text-3xl font-bold tracking-[-0.035em] sm:text-4xl">
+          <h2>
             Free where you work.
             <br />
             Paid only where we do.

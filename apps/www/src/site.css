@@ -747,47 +747,48 @@ body {
 
 .landing-views,
 .landing-workspaces {
-  padding: clamp(6.5rem, 11vw, 10rem) 0;
+  padding: clamp(5rem, 8vw, 7rem) 0;
 }
 
 .landing-views-heading {
-  display: grid;
-  max-width: 67rem;
-  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
-  column-gap: 4rem;
+  max-width: 44rem;
 }
 
-.landing-views-heading .landing-kicker {
-  grid-column: 1 / -1;
-  margin-bottom: 1.25rem;
+.landing-views-heading h2 {
+  margin-top: 1rem;
 }
 
 .landing-views-heading h2,
 .landing-section-copy h2,
-.landing-final h2 {
+.landing-final h2,
+.landing-cloud h2 {
   color: rgb(var(--land-ink));
   font-family: var(--font-brand);
-  font-size: clamp(2.7rem, 5vw, 4.6rem);
+  font-size: clamp(2.05rem, 3.1vw, 2.85rem);
   font-weight: 700;
-  letter-spacing: -0.055em;
-  line-height: 0.98;
+  letter-spacing: -0.038em;
+  line-height: 1.12;
+  text-wrap: balance;
 }
 
 .landing-views-heading > p:last-child,
 .landing-section-copy > p:not(.landing-kicker),
 .landing-final-action > p {
-  max-width: 35rem;
-  align-self: end;
+  max-width: 36rem;
   color: rgb(var(--land-muted));
   font-size: 1rem;
   line-height: 1.75;
 }
 
+.landing-views-heading > p:last-child {
+  margin-top: 1.25rem;
+}
+
 .view-story {
   display: grid;
   grid-template-columns: minmax(15rem, 0.68fr) minmax(0, 1.32fr);
-  gap: clamp(2.5rem, 6vw, 6rem);
-  margin-top: 4.5rem;
+  gap: clamp(2.5rem, 5vw, 4.5rem);
+  margin-top: 3.25rem;
   align-items: stretch;
 }
 
@@ -799,13 +800,13 @@ body {
   position: relative;
   display: grid;
   width: 100%;
-  min-height: 7.4rem;
+  min-height: 6.25rem;
   grid-template-columns: 2.2rem 1fr;
   gap: 0.75rem;
   border: 0;
   border-bottom: 1px solid rgb(var(--land-line));
   background: transparent;
-  padding: 1.35rem 0.5rem 1.35rem 0;
+  padding: 1.1rem 0.5rem 1.1rem 0;
   color: rgb(var(--land-muted));
   cursor: pointer;
   text-align: left;
@@ -867,7 +868,7 @@ body {
 
 .view-window {
   overflow: hidden;
-  min-height: 29rem;
+  min-height: 26rem;
   border: 1px solid rgb(var(--land-line) / 0.82);
   border-radius: 1rem;
   background: rgb(var(--land-panel));
@@ -931,7 +932,7 @@ body {
 }
 
 .view-scene {
-  min-height: 22.5rem;
+  min-height: 19.5rem;
   padding: 0.25rem 1.5rem 1.5rem;
   animation: view-scene-enter 420ms var(--ease-out-strong) both;
 }
@@ -953,7 +954,7 @@ body {
 
 .view-list-scene > div {
   display: grid;
-  min-height: 4.4rem;
+  min-height: 4rem;
   grid-template-columns: 1rem minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 0.75rem;
@@ -999,7 +1000,7 @@ body {
 
 .view-lane-scene {
   display: grid;
-  min-height: 20rem;
+  min-height: 17rem;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.7rem;
 }
@@ -1067,7 +1068,7 @@ body {
 
 .view-tag-scene > div {
   display: grid;
-  min-height: 5.8rem;
+  min-height: 4.7rem;
   grid-template-columns: 8rem 1fr;
   align-items: center;
   gap: 1.25rem;
@@ -1113,26 +1114,26 @@ body {
 .landing-privacy-layout,
 .landing-workspace-layout {
   display: grid;
-  grid-template-columns: minmax(0, 0.78fr) minmax(30rem, 1.22fr);
+  grid-template-columns: minmax(0, 0.92fr) minmax(28rem, 1.08fr);
   align-items: center;
-  gap: clamp(4rem, 9vw, 8rem);
-  padding-top: clamp(6.5rem, 11vw, 9rem);
-  padding-bottom: clamp(6.5rem, 11vw, 9rem);
+  gap: clamp(3.5rem, 6vw, 5.5rem);
+  padding-top: clamp(5rem, 8vw, 7rem);
+  padding-bottom: clamp(5rem, 8vw, 7rem);
 }
 
 .landing-section-copy h2 {
-  margin-top: 1.1rem;
+  margin-top: 1rem;
 }
 
 .landing-section-copy > p:not(.landing-kicker) {
-  margin-top: 1.6rem;
+  margin-top: 1.25rem;
 }
 
 .landing-copy-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.8rem 1.35rem;
-  margin-top: 1.7rem;
+  margin-top: 1.5rem;
 }
 
 .landing-copy-actions a:first-child,
@@ -1148,7 +1149,7 @@ body {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  min-height: 24rem;
+  min-height: 21.5rem;
   border: 1px solid rgb(var(--land-line) / 0.8);
   border-radius: 1rem;
   background: rgb(var(--land-panel));
@@ -1168,7 +1169,7 @@ body {
 
 .privacy-node {
   position: absolute;
-  top: 6.4rem;
+  top: 5.2rem;
   display: grid;
   width: 9.6rem;
   place-items: center;
@@ -1224,7 +1225,7 @@ body {
 
 .privacy-rail {
   position: absolute;
-  top: 8.15rem;
+  top: 6.95rem;
   right: 11rem;
   left: 11rem;
   height: 3rem;
@@ -1340,7 +1341,7 @@ body {
 }
 
 .landing-workspace-layout {
-  grid-template-columns: minmax(30rem, 1.18fr) minmax(0, 0.82fr);
+  grid-template-columns: minmax(28rem, 1.08fr) minmax(0, 0.92fr);
 }
 
 .workspace-switcher {
@@ -1551,14 +1552,14 @@ body {
 .landing-final-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(23rem, 0.72fr);
-  gap: clamp(3rem, 8vw, 8rem);
-  padding-top: clamp(5.5rem, 9vw, 8rem);
-  padding-bottom: clamp(5.5rem, 9vw, 8rem);
+  gap: clamp(3rem, 6vw, 6rem);
+  padding-top: clamp(5rem, 8vw, 7rem);
+  padding-bottom: clamp(5rem, 8vw, 7rem);
 }
 
 .landing-final h2 {
-  max-width: 42rem;
-  margin-top: 1.1rem;
+  max-width: 30rem;
+  margin-top: 1rem;
 }
 
 .landing-final-action {
@@ -1686,19 +1687,6 @@ body {
     margin-top: 0;
   }
 
-  .landing-views-heading {
-    display: block;
-    max-width: 44rem;
-  }
-
-  .landing-views-heading h2 {
-    margin-top: 1rem;
-  }
-
-  .landing-views-heading > p:last-child {
-    margin-top: 1.4rem;
-  }
-
   .view-story {
     grid-template-columns: 1fr;
     gap: 2rem;
@@ -1824,13 +1812,14 @@ body {
 
   .landing-views,
   .landing-workspaces {
-    padding: 6rem 0;
+    padding: 4.5rem 0;
   }
 
   .landing-views-heading h2,
   .landing-section-copy h2,
-  .landing-final h2 {
-    font-size: clamp(2.5rem, 13vw, 3.5rem);
+  .landing-final h2,
+  .landing-cloud h2 {
+    font-size: clamp(1.85rem, 7.5vw, 2.3rem);
   }
 
   .view-mode-list {
@@ -1885,12 +1874,12 @@ body {
 
   .landing-privacy-layout,
   .landing-workspace-layout {
-    padding-top: 6rem;
-    padding-bottom: 6rem;
+    padding-top: 4.5rem;
+    padding-bottom: 4.5rem;
   }
 
   .privacy-path {
-    min-height: 30rem;
+    min-height: 26rem;
   }
 
   .privacy-node {
