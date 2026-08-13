@@ -228,7 +228,16 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   const connect = useCallback(
     async (input: ConnectSyncInput) => {
-      const normalized = validateConnectInput(input);
+      let normalized: SyncAccount;
+      try {
+        normalized = validateConnectInput(input);
+      } catch (error) {
+        // Validation failures must surface exactly like network failures;
+        // rejecting before setStatus left the UI frozen with no feedback.
+        setStatus("error");
+        setMessage(messageForError(error));
+        throw error;
+      }
       setStatus("connecting");
       setMessage(
         input.mode === "register"

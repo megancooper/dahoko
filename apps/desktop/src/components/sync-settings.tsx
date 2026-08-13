@@ -218,7 +218,11 @@ export function SyncSettings() {
   const [encryptionPassphrase, setEncryptionPassphrase] = useState("");
   const [showDelete, setShowDelete] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
-  const busy = status === "connecting" || status === "syncing";
+  const [pendingMode, setPendingMode] = useState<
+    "register" | "login" | null
+  >(null);
+  const busy =
+    status === "connecting" || status === "syncing" || pendingMode !== null;
 
   useEffect(() => {
     if (savedConfig?.serverUrl) setServerUrl(savedConfig.serverUrl);
@@ -226,6 +230,8 @@ export function SyncSettings() {
   }, [savedConfig?.email, savedConfig?.serverUrl]);
 
   const submit = async (mode: "register" | "login") => {
+    if (pendingMode) return;
+    setPendingMode(mode);
     try {
       await connect({
         mode,
@@ -236,8 +242,12 @@ export function SyncSettings() {
       });
       setPassword("");
       setEncryptionPassphrase("");
-    } catch {
-      // The provider exposes a safe, actionable message in this section.
+    } catch (error) {
+      // The provider surfaces a safe, actionable message in this section;
+      // keep the raw failure on the console for debugging.
+      console.error("[dahoko] sync connect failed:", error);
+    } finally {
+      setPendingMode(null);
     }
   };
 
@@ -393,7 +403,13 @@ export function SyncSettings() {
           ) : null}
         </div>
       ) : (
-        <div className="mt-3">
+        <form
+          className="mt-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit("login");
+          }}
+        >
           {hostedServerUrl && serverUrl !== hostedServerUrl ? (
             <Button
               type="button"
@@ -490,19 +506,14 @@ export function SyncSettings() {
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={busy}
-              onClick={() => void submit("login")}
-            >
-              {status === "connecting" ? (
+            <Button type="submit" size="sm" disabled={busy}>
+              {pendingMode === "login" ? (
                 <LoaderCircle
                   aria-hidden="true"
                   className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
                 />
               ) : null}
-              {status === "connecting" ? "Connecting…" : "Sign in & sync"}
+              {pendingMode === "login" ? "Connecting…" : "Sign in & sync"}
             </Button>
             <Button
               type="button"
@@ -511,16 +522,18 @@ export function SyncSettings() {
               disabled={busy}
               onClick={() => void submit("register")}
             >
-              {status === "connecting" ? (
+              {pendingMode === "register" ? (
                 <LoaderCircle
                   aria-hidden="true"
                   className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
                 />
               ) : null}
-              Create account
+              {pendingMode === "register"
+                ? "Creating account…"
+                : "Create account"}
             </Button>
           </div>
-        </div>
+        </form>
       )}
     </section>
   );
