@@ -211,10 +211,12 @@ const VIEW_MODES = [
 type ViewMode = (typeof VIEW_MODES)[number]["id"];
 
 const VIEW_TASKS = [
-  { title: "Review sync security", tag: "privacy", priority: "P2" },
-  { title: "Send launch notes", tag: "release", priority: "P1" },
-  { title: "Plan the week", tag: "personal", priority: "P3" },
-  { title: "Update the docs", tag: "release", priority: "P2" },
+  { title: "Send launch notes", tag: "release", priority: "P1", due: "Today" },
+  { title: "Review sync security", tag: "privacy", priority: "P2", due: "Today" },
+  { title: "Fix export flow", tag: "release", priority: "P1", due: "Thu" },
+  { title: "Update the docs", tag: "release", priority: "P2", due: "Fri" },
+  { title: "Plan the week", tag: "personal", priority: "P3", due: "Fri" },
+  { title: "Book the dentist", tag: "personal", priority: "P3", due: "Sat" },
 ] as const;
 
 const WORKSPACES = [
@@ -224,7 +226,12 @@ const WORKSPACES = [
     initial: "P",
     accent: "celadon",
     count: 7,
-    tasks: ["Book the dentist", "Pack for Portland", "Water the basil"],
+    tasks: [
+      "Book the dentist",
+      "Pack for Portland",
+      "Water the basil",
+      "Renew passport",
+    ],
   },
   {
     id: "studio",
@@ -232,7 +239,12 @@ const WORKSPACES = [
     initial: "S",
     accent: "apricot",
     count: 12,
-    tasks: ["Review client cut", "Send launch brief", "Invoice Northstar"],
+    tasks: [
+      "Review client cut",
+      "Send launch brief",
+      "Invoice Northstar",
+      "Book color grade",
+    ],
   },
   {
     id: "routines",
@@ -240,7 +252,12 @@ const WORKSPACES = [
     initial: "R",
     accent: "blue",
     count: 5,
-    tasks: ["Weekly planning", "Recurring metrics", "Back up archive"],
+    tasks: [
+      "Weekly planning",
+      "Recurring metrics",
+      "Back up archive",
+      "Clear the inbox",
+    ],
   },
 ] as const;
 
@@ -702,9 +719,10 @@ function TaskRain() {
 
 function CaptureScene() {
   const tasks = [
-    { title: "Send launch notes", detail: "#release", tone: "apricot" },
-    { title: "Review sync security", detail: "#privacy", tone: "celadon" },
-    { title: "Plan the week", detail: "#personal", tone: "blue" },
+    { title: "Send launch notes", detail: "#release", tone: "apricot", when: "Today" },
+    { title: "Review sync security", detail: "#privacy", tone: "celadon", when: "Today" },
+    { title: "Water the basil", detail: "#home", tone: "celadon", when: "Thu" },
+    { title: "Plan the week", detail: "#personal", tone: "blue", when: "Fri" },
   ] as const;
 
   return (
@@ -726,7 +744,7 @@ function CaptureScene() {
                 <strong>Personal</strong>
               </div>
             </div>
-            <p className="is-active">Inbox <span>3</span></p>
+            <p className="is-active">Inbox <span>4</span></p>
             <p>Today <span>1</span></p>
             <p>Completed</p>
             <small className="capture-sidebar-label">Lists</small>
@@ -740,7 +758,7 @@ function CaptureScene() {
                 <small>Monday, July 27</small>
                 <strong>Inbox</strong>
               </div>
-              <span>3 caught</span>
+              <span>4 caught</span>
             </div>
             <div className="capture-input">
               <span aria-hidden="true">+</span>
@@ -756,7 +774,7 @@ function CaptureScene() {
               <small>understood</small>
             </div>
             <div className="capture-task-list">
-              {tasks.map((task, index) => (
+              {tasks.map((task) => (
                 <div className="capture-task" key={task.title}>
                   <span
                     className={`capture-task-dot is-${task.tone}`}
@@ -766,7 +784,7 @@ function CaptureScene() {
                     <strong>{task.title}</strong>
                     <small>{task.detail}</small>
                   </div>
-                  <time>{index === 2 ? "Fri" : "Today"}</time>
+                  <time>{task.when}</time>
                 </div>
               ))}
             </div>
@@ -884,23 +902,33 @@ function ViewScene({ mode }: { mode: ViewMode }) {
 function ListScene() {
   return (
     <div className="view-list-scene">
-      {VIEW_TASKS.map((task, index) => (
+      {VIEW_TASKS.map((task) => (
         <div key={task.title}>
-          <span className={index === 0 ? "is-today" : undefined} />
+          <span className={task.due === "Today" ? "is-today" : undefined} />
           <strong>{task.title}</strong>
           <small>#{task.tag}</small>
           <em>{task.priority}</em>
+          <time>{task.due}</time>
         </div>
       ))}
+      <div className="is-done">
+        <span className="is-checked" />
+        <strong>Water the basil</strong>
+        <small>#home</small>
+        <time>Done</time>
+      </div>
     </div>
   );
 }
 
 function SwimlaneScene() {
   const lanes = [
-    { label: "Today", tasks: [VIEW_TASKS[0], VIEW_TASKS[1]] },
-    { label: "Next", tasks: [VIEW_TASKS[2]] },
-    { label: "Waiting", tasks: [VIEW_TASKS[3]] },
+    {
+      label: "Today",
+      tasks: [VIEW_TASKS[0], VIEW_TASKS[1], VIEW_TASKS[2]],
+    },
+    { label: "Next", tasks: [VIEW_TASKS[3], VIEW_TASKS[4]] },
+    { label: "Waiting", tasks: [VIEW_TASKS[5]] },
   ];
   return (
     <div className="view-lane-scene">
@@ -913,7 +941,10 @@ function SwimlaneScene() {
           {lane.tasks.map((task) => (
             <div className="view-lane-task" key={task.title}>
               <strong>{task.title}</strong>
-              <span>#{task.tag}</span>
+              <span>
+                #{task.tag}
+                <time>{task.due}</time>
+              </span>
             </div>
           ))}
         </div>
@@ -924,25 +955,36 @@ function SwimlaneScene() {
 
 function TagScene() {
   const groups = [
-    { tag: "privacy", tasks: [VIEW_TASKS[0]] },
-    { tag: "release", tasks: [VIEW_TASKS[1], VIEW_TASKS[3]] },
-    { tag: "personal", tasks: [VIEW_TASKS[2]] },
+    {
+      tag: "release",
+      accent: "apricot",
+      tasks: [VIEW_TASKS[0], VIEW_TASKS[2], VIEW_TASKS[3]],
+    },
+    {
+      tag: "personal",
+      accent: "blue",
+      tasks: [VIEW_TASKS[4], VIEW_TASKS[5]],
+    },
+    { tag: "privacy", accent: "celadon", tasks: [VIEW_TASKS[1]] },
   ];
   return (
     <div className="view-tag-scene">
       {groups.map((group) => (
-        <div key={group.tag}>
+        <section key={group.tag} className={`is-${group.accent}`}>
           <p>
             <span>#</span>
             {group.tag}
             <small>{group.tasks.length}</small>
           </p>
-          <section>
-            {group.tasks.map((task) => (
-              <span key={task.title}>{task.title}</span>
-            ))}
-          </section>
-        </div>
+          {group.tasks.map((task) => (
+            <div key={task.title}>
+              <span aria-hidden="true" />
+              <strong>{task.title}</strong>
+              <em>{task.priority}</em>
+              <time>{task.due}</time>
+            </div>
+          ))}
+        </section>
       ))}
     </div>
   );
@@ -1045,7 +1087,9 @@ function WorkspaceStory({
                 <p key={task}>
                   <span aria-hidden="true" />
                   {task}
-                  <small>{index === 0 ? "Today" : "Later"}</small>
+                  <small>
+                    {["Today", "Tomorrow", "Thu", "Later"][index]}
+                  </small>
                 </p>
               ))}
             </section>
