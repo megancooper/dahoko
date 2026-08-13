@@ -337,7 +337,6 @@ export function LandingExperience({
           <div className="landing-frame landing-forecast">
             <span>Today’s forecast</span>
             <strong>100% chance you remember it</strong>
-            <span className="landing-forecast-line" aria-hidden="true" />
             <small>Everything is captured locally first.</small>
           </div>
         </section>
@@ -529,7 +528,7 @@ function CloudPricing({
   const price = PRICING[interval];
 
   return (
-    <section id="cloud" className="landing-cloud border-t border-border/70">
+    <section id="cloud" className="landing-cloud">
       <div className="landing-frame py-24">
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <p className="landing-kicker">Dahoko Cloud</p>
@@ -546,9 +545,9 @@ function CloudPricing({
         </div>
 
         <div className="mx-auto grid max-w-4xl gap-5 md:grid-cols-2">
-          <article className="flex flex-col rounded-2xl border border-border bg-card p-7 shadow-soft">
+          <article className="flex flex-col rounded-2xl border border-border/60 bg-card p-7 shadow-soft">
             <div className="mb-5 flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-muted text-foreground">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-muted text-foreground">
                 <Laptop aria-hidden="true" className="h-5 w-5" />
               </span>
               <div>
@@ -591,11 +590,11 @@ function CloudPricing({
           </article>
 
           <article className="relative flex flex-col rounded-2xl border border-primary-strong/35 bg-card p-7 shadow-[0_24px_60px_-30px_rgb(var(--brand-primary-depth)/0.55)]">
-            <span className="absolute -top-3 right-6 rounded-full border border-primary-strong/25 bg-primary px-3 py-1 text-[11px] font-bold text-primary-foreground">
+            <span className="absolute -top-3 right-6 rounded-full bg-primary px-3 py-1 text-[11px] font-bold text-primary-foreground shadow-soft">
               Pro
             </span>
             <div className="mb-5 flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl border border-primary-strong/25 bg-primary/20 text-primary-strong">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/20 text-primary-strong">
                 <Cloud aria-hidden="true" className="h-5 w-5" />
               </span>
               <div>
@@ -620,7 +619,7 @@ function CloudPricing({
               <div
                 role="group"
                 aria-label="Billing interval"
-                className="flex rounded-lg border border-border bg-muted/55 p-0.5 text-xs font-semibold"
+                className="flex rounded-lg bg-muted/70 p-0.5 text-xs font-semibold"
               >
                 {(["monthly", "yearly"] as const).map((option) => (
                   <button
@@ -659,7 +658,7 @@ function CloudPricing({
                 </li>
               ))}
             </ul>
-            <p className="mb-6 flex items-start gap-2 rounded-xl border border-border/80 bg-muted/40 px-3.5 py-2.5 text-xs leading-5 text-muted-foreground">
+            <p className="mb-6 flex items-start gap-2 rounded-xl bg-muted/50 px-3.5 py-2.5 text-xs leading-5 text-muted-foreground">
               <LockKeyhole
                 aria-hidden="true"
                 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
