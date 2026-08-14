@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   Moon,
   RefreshCw,
+  ShieldCheck,
   SlidersHorizontal,
   Upload,
 } from "lucide-react";
@@ -354,6 +355,22 @@ export function SettingsDialog({
                         checked={settings.showCompletedInInbox}
                         onCheckedChange={(checked) =>
                           updateSettings({ showCompletedInInbox: checked })
+                        }
+                      />
+                    </div>
+                  </SettingRow>
+
+                  <SettingRow
+                    icon={<ShieldCheck className={iconClass} />}
+                    label="Crash reports"
+                    hint="Anonymous error diagnostics; never task content"
+                  >
+                    <div className="flex justify-end">
+                      <Switch
+                        aria-label="Send anonymous crash reports"
+                        checked={settings.shareDiagnostics}
+                        onCheckedChange={(checked) =>
+                          updateSettings({ shareDiagnostics: checked })
                         }
                       />
                     </div>

@@ -16,6 +16,19 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        // Baked at build time; Infisical locally / CI secrets provide the
+        // env vars. A blank token disables telemetry entirely.
+        val posthogToken =
+            providers.environmentVariable("POSTHOG_PROJECT_TOKEN").orNull
+                ?: providers.gradleProperty("posthogProjectToken").orNull
+                ?: ""
+        val posthogHost =
+            providers.environmentVariable("POSTHOG_HOST").orNull
+                ?: providers.gradleProperty("posthogHost").orNull
+                ?: "https://us.i.posthog.com"
+        buildConfigField("String", "POSTHOG_PROJECT_TOKEN", "\"$posthogToken\"")
+        buildConfigField("String", "POSTHOG_HOST", "\"$posthogHost\"")
     }
 
     buildTypes {
@@ -36,6 +49,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -58,6 +72,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // 3.46.0+ required for the PostHog.logger API.
+    implementation("com.posthog:posthog-android:3.58.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

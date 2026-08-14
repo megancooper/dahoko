@@ -12,6 +12,7 @@ import {
   type Settings,
   type ThemePreference,
 } from "./settings-model";
+import { setDiagnosticsEnabled } from "@/lib/telemetry";
 
 export {
   DEFAULT_SETTINGS,
@@ -90,6 +91,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    setDiagnosticsEnabled(settings.shareDiagnostics);
+  }, [settings.shareDiagnostics]);
 
   // Follow OS theme changes while in system mode.
   useEffect(() => {

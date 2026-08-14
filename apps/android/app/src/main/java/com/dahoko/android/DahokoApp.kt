@@ -14,6 +14,8 @@ class DahokoApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // First so exception autocapture covers the rest of startup.
+        Telemetry.setup(this)
         val db = Room.databaseBuilder(this, DahokoDb::class.java, "dahoko.db").build()
         repository = Repository(db)
         syncStore = SyncStore(this)

@@ -14,7 +14,12 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "pg": "8.16.3"
+    "@opentelemetry/api-logs": "^0.221.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-logs": "^0.221.0",
+    "pg": "8.16.3",
+    "posthog-node": "^5.49.0"
   },
   "devDependencies": {
     "@dahoko/typescript-config": "workspace:*",

@@ -16,6 +16,8 @@ export interface Settings {
   defaultViews: DefaultViews;
   /** Keep tasks completed today visible in the Inbox */
   showCompletedInInbox: boolean;
+  /** Send anonymous crash reports and diagnostics; never task content */
+  shareDiagnostics: boolean;
 }
 
 export const DEFAULT_VIEW_CONTEXTS: readonly DefaultViewContext[] = [
@@ -40,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
     tags: "tags",
   },
   showCompletedInInbox: true,
+  shareDiagnostics: true,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -82,6 +85,10 @@ export function normalizeSettings(
       typeof stored.showCompletedInInbox === "boolean"
         ? stored.showCompletedInInbox
         : DEFAULT_SETTINGS.showCompletedInInbox,
+    shareDiagnostics:
+      typeof stored.shareDiagnostics === "boolean"
+        ? stored.shareDiagnostics
+        : DEFAULT_SETTINGS.shareDiagnostics,
   };
 }
 

@@ -13,6 +13,13 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@dahoko/www", "dev"],
       "port": 5102
+    },
+    {
+      "name": "desktop-preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@dahoko/desktop", "preview"],
+      "port": 4173,
+      "autoPort": true
     }
   ]
 }

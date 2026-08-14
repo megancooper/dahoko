@@ -25,6 +25,9 @@ import {
   type DahokoBackup,
 } from "@/db/backup";
 import { createCoalescedRunner } from "./coalesced-runner";
+import { createLogger } from "@/lib/log";
+
+const log = createLogger("db");
 
 interface StoreValue {
   ready: boolean;
@@ -198,7 +201,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setReady(true);
       })
       .catch((error) => {
-        console.error("dahoko: failed to load database", error);
+        log.error("failed to load database", error, { phase: "startup" });
       });
     return () => {
       cancelled = true;

@@ -13,6 +13,9 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Update } from "@tauri-apps/plugin-updater";
 import desktopPackage from "../../package.json";
 import { isTauri } from "@/db";
+import { createLogger } from "@/lib/log";
+
+const log = createLogger("updater");
 
 export type UpdaterStatus =
   | "idle"
@@ -92,6 +95,7 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
         setStatus("current");
       }
     } catch (error) {
+      log.warn("update check failed", { error: errorMessage(error) });
       setLastError(errorMessage(error));
       setStatus("error");
     }
@@ -136,6 +140,9 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
     } catch (error) {
+      log.error("update install failed", error, {
+        version: pendingUpdate.current?.version,
+      });
       setLastError(errorMessage(error));
       setStatus("error");
     }

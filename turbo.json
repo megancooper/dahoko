@@ -3,7 +3,16 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**"],
+      "env": [
+        "CI",
+        "POSTHOG_CLI_TOKEN",
+        "POSTHOG_HOST",
+        "POSTHOG_PROJECT_ID",
+        "POSTHOG_PROJECT_TOKEN",
+        "RELEASE_VERSION",
+        "VITE_DAHOKO_SYNC_URL"
+      ]
     },
     "dev": {
       "cache": false,

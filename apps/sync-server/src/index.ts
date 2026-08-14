@@ -1,3 +1,5 @@
+// First, so exception autocapture hooks install before anything else runs.
+import { log, shutdownTelemetry } from "./telemetry.js";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { billingOptionsFromEnv } from "./billing.js";
@@ -44,9 +46,7 @@ if (databaseUrl) {
   // CI applies migrations on deploy; running them here as well is an
   // idempotent safety net serialized by an advisory lock.
   const applied = await runMigrations(pgStore);
-  console.log(
-    JSON.stringify({ event: "sync_server_migrations", applied }),
-  );
+  log.info("sync_server_migrations", { applied });
   store = pgStore;
 } else if (databasePath !== ":memory:") {
   mkdirSync(dirname(databasePath), { recursive: true, mode: 0o700 });
@@ -64,14 +64,11 @@ const syncServer = createSyncServer({
 });
 
 syncServer.server.listen(port, host, () => {
-  console.log(
-    JSON.stringify({
-      event: "sync_server_started",
-      host,
-      port,
-      database: databaseUrl ? "postgres" : databasePath,
-    }),
-  );
+  log.info("sync_server_started", {
+    host,
+    port,
+    database: databaseUrl ? "postgres" : databasePath,
+  });
 });
 
 let stopping = false;
@@ -79,6 +76,7 @@ const stop = async () => {
   if (stopping) return;
   stopping = true;
   await syncServer.close();
+  await shutdownTelemetry();
 };
 
 process.on("SIGINT", () => void stop());

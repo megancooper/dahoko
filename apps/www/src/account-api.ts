@@ -6,6 +6,8 @@
  * account salt bound as additional authenticated data.
  */
 
+import { reportError } from "./telemetry";
+
 const KDF_ITERATIONS = 600_000;
 const MAX_BLOB_BYTES = 14 * 1024 * 1024;
 
@@ -131,12 +133,17 @@ async function request(
       : {};
   if (!response.ok) {
     const message = record.error;
-    throw new AccountApiError(
+    const error = new AccountApiError(
       typeof message === "string" && message.length <= 240
         ? message
         : "The request could not be completed.",
       response.status,
     );
+    // 4xx responses are expected account states; 5xx means a server bug.
+    if (response.status >= 500) {
+      reportError(error, { path, status: response.status });
+    }
+    throw error;
   }
   return { status: response.status, value: record };
 }

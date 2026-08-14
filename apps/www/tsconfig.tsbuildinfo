@@ -1,1 +1,1 @@
-{"root":["./src/account-api.ts","./src/account.tsx","./src/app.tsx","./src/content.ts","./src/docs.tsx","./src/landing.tsx","./src/main.tsx","./vite.config.ts","./tailwind.config.ts"],"version":"5.7.3"}
+{"root":["./src/account-api.ts","./src/account.tsx","./src/app.tsx","./src/content.ts","./src/docs.tsx","./src/env.d.ts","./src/landing.tsx","./src/main.tsx","./src/telemetry.ts","./vite.config.ts","./tailwind.config.ts"],"version":"5.7.3"}

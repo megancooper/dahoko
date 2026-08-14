@@ -11,6 +11,11 @@ services:
       DAHOKO_SYNC_ORIGINS: ${DAHOKO_SYNC_ORIGINS:-tauri://localhost,http://tauri.localhost}
       DAHOKO_TRUST_PROXY: ${DAHOKO_TRUST_PROXY:-false}
       DAHOKO_ACCOUNT_HASH_KEY: ${DAHOKO_ACCOUNT_HASH_KEY:?Set DAHOKO_ACCOUNT_HASH_KEY to a stable random secret}
+      # PostHog error tracking + logs; leave unset to run without telemetry.
+      POSTHOG_PROJECT_TOKEN: ${POSTHOG_PROJECT_TOKEN:-}
+      POSTHOG_HOST: ${POSTHOG_HOST:-https://us.i.posthog.com}
+      DAHOKO_ENV: ${DAHOKO_ENV:-production}
+      DAHOKO_LOG_LEVEL: ${DAHOKO_LOG_LEVEL:-info}
     ports:
       - "${DAHOKO_SYNC_PORT:-8787}:8787"
     volumes:

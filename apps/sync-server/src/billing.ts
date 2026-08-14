@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { log } from "./telemetry.js";
 
 /**
  * Stripe billing for hosted Dahoko Cloud, following the "single sync
@@ -164,13 +165,10 @@ export class Billing {
       );
     }
     if (!response.ok) {
-      console.error(
-        JSON.stringify({
-          event: "stripe_api_error",
-          path,
-          status: response.status,
-        }),
-      );
+      log.error("stripe_api_error", undefined, {
+        path,
+        status: response.status,
+      });
       throw new BillingError(
         502,
         "The billing request could not be completed.",
@@ -381,9 +379,7 @@ export class Billing {
       ?.object as Record<string, unknown> | undefined;
     const customerId = object?.customer;
     if (typeof customerId !== "string" || !customerId.startsWith("cus_")) {
-      console.error(
-        JSON.stringify({ event: "stripe_webhook_no_customer", type }),
-      );
+      log.warn("stripe_webhook_no_customer", { type });
       return;
     }
     // Only sync customers this server knows; other webhooks (e.g. from a

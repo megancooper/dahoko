@@ -21,6 +21,7 @@ import {
   type EncryptedBlob,
   type Store,
 } from "./store.js";
+import { log } from "./telemetry.js";
 
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1_000;
 const AUTH_WINDOW_MS = 15 * 60 * 1_000;
@@ -378,6 +379,7 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
 
   const server = createServer(async (request, response) => {
     const requestId = randomUUID();
+    const startedAt = Date.now();
     response.setHeader("X-Request-Id", requestId);
     let path = "/";
     try {
@@ -414,9 +416,7 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
         } catch (error) {
           // Non-signature failures are logged but acknowledged so Stripe
           // retries on transient errors without flagging the endpoint.
-          console.error(
-            JSON.stringify({ event: "stripe_webhook_error", requestId }),
-          );
+          log.error("stripe_webhook_error", error, { requestId });
           if (error instanceof BillingError && error.status < 500) {
             throw error;
           }
@@ -606,19 +606,29 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
       if (error instanceof HttpError || error instanceof BillingError) {
         writeJson(response, error.status, { error: error.message });
       } else {
-        console.error(
-          JSON.stringify({
-            event: "sync_server_error",
-            requestId,
-            path,
-          }),
-        );
+        log.error("sync_server_error", error, {
+          requestId,
+          path,
+          method: request.method,
+        });
         writeJson(response, 500, {
           error: "An unexpected server error occurred.",
           requestId,
         });
       }
     } finally {
+      // One wide event per request; 2xx/3xx stay at debug so the default
+      // info level only ships actionable traffic.
+      const status = response.statusCode;
+      const level =
+        status >= 500 ? "warn" : status >= 400 ? "info" : "debug";
+      log[level]("http_request", {
+        requestId,
+        method: request.method,
+        path,
+        status,
+        durationMs: Date.now() - startedAt,
+      });
       requestCount += 1;
       if (requestCount % 1_000 === 0) void store.cleanupSessions(now()).catch(() => {});
     }

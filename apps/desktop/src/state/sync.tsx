@@ -36,6 +36,9 @@ import {
   type SavedSyncConfig,
 } from "@/sync/storage";
 import type { LocalSyncState } from "@/sync/bundle";
+import { createLogger } from "@/lib/log";
+
+const log = createLogger("sync");
 
 type SyncStatus =
   | "disconnected"
@@ -219,6 +222,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         setStatus("disconnected");
         setMessage("Your session expired. Sign in again.");
       } else {
+        // 4xx responses are expected states (conflicts, lapsed plans);
+        // anything else is a bug or outage worth a report.
+        if (error instanceof SyncApiError && error.status < 500) {
+          log.warn("sync rejected", { status: error.status });
+        } else {
+          log.error("sync failed", error);
+        }
         setStatus("error");
         setMessage(messageForError(error));
       }
@@ -286,6 +296,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         // keep the signed-in session so the user can upgrade from here.
         if (error instanceof SyncApiError && error.status === 402) {
           return;
+        }
+        if (error instanceof SyncApiError && error.status < 500) {
+          log.warn("sync connect rejected", {
+            mode: input.mode,
+            status: error.status,
+          });
+        } else {
+          log.error("sync connect failed", error, { mode: input.mode });
         }
         credentialsRef.current = null;
         localStateRef.current = null;

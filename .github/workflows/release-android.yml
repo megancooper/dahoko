@@ -59,6 +59,10 @@ jobs:
 
       - name: Build release APK
         working-directory: apps/android
+        env:
+          # Baked into BuildConfig; empty values disable telemetry cleanly.
+          POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
         run: ./gradlew assembleRelease
 
       - name: Sign APK

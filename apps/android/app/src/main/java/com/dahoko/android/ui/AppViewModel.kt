@@ -3,6 +3,7 @@ package com.dahoko.android.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dahoko.android.AppLog
 import com.dahoko.android.DahokoApp
 import com.dahoko.android.data.ListEntity
 import com.dahoko.android.data.StatusEntity
@@ -233,6 +234,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 syncNow()
             } catch (error: Exception) {
+                // 4xx responses are expected states (bad password, lapsed
+                // plan); anything else is a bug or outage worth a report.
+                if (error is SyncApiException && error.status in 400..499) {
+                    AppLog.w("sync", "connect rejected", mapOf("status" to error.status, "mode" to mode))
+                } else {
+                    AppLog.e("sync", "connect failed", error, mapOf("mode" to mode))
+                }
                 _syncState.value = _syncState.value.copy(
                     syncing = false,
                     message = syncErrorMessage(error),
@@ -278,6 +286,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     workspaces.value.firstOrNull()?.let { _workspaceId.value = it.id }
                 }
             } catch (error: Exception) {
+                if (error is SyncApiException && error.status in 400..499) {
+                    AppLog.w("sync", "sync rejected", mapOf("status" to error.status))
+                } else {
+                    AppLog.e("sync", "sync failed", error)
+                }
                 _syncState.value = _syncState.value.copy(
                     syncing = false,
                     message = syncErrorMessage(error),
@@ -314,6 +327,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 onUrl(url)
             } catch (error: Exception) {
+                AppLog.e("billing", "checkout failed", error, mapOf("interval" to interval))
                 _syncState.value = _syncState.value.copy(
                     message = syncErrorMessage(error),
                     error = true,
@@ -331,6 +345,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 onUrl(url)
             } catch (error: Exception) {
+                AppLog.e("billing", "portal open failed", error)
                 _syncState.value = _syncState.value.copy(
                     message = syncErrorMessage(error),
                     error = true,
@@ -362,6 +377,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 if (subscription.active) syncNow()
             } catch (error: Exception) {
+                AppLog.e("billing", "billing refresh failed", error)
                 _syncState.value = _syncState.value.copy(
                     message = syncErrorMessage(error),
                     error = true,
