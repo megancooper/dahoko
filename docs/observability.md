@@ -17,10 +17,10 @@ locally built apps are silent by default.
 
 | Variable                | What                                                        | Where |
 | ----------------------- | ----------------------------------------------------------- | ----- |
-| `POSTHOG_PROJECT_TOKEN` | `phc_…` ingestion token; safe to embed in client bundles    | Infisical (all envs); GitHub secret for CI |
-| `POSTHOG_PROJECT_ID`    | Numeric project id; only used for sourcemap uploads         | Infisical; GitHub secret |
-| `POSTHOG_HOST`          | Optional; defaults to `https://us.i.posthog.com` (set `https://eu.i.posthog.com` for EU) | Infisical; GitHub repo var |
-| `POSTHOG_CLI_TOKEN`     | `phx_…` **personal API key** with error-tracking write scope; CI-only, powers sourcemap uploads. Never reaches any bundle. | GitHub secret |
+| `POSTHOG_PROJECT_TOKEN` | `phc_…` ingestion token; safe to embed in client bundles    | Infisical (all envs) |
+| `POSTHOG_PROJECT_ID`    | Numeric project id; only used for sourcemap uploads         | Infisical |
+| `POSTHOG_HOST`          | Optional; defaults to `https://us.i.posthog.com` (set `https://eu.i.posthog.com` for EU) | Infisical |
+| `POSTHOG_CLI_TOKEN`     | `phx_…` **personal API key** with error-tracking write scope; CI-only, powers sourcemap uploads. Never reaches any bundle. | Infisical (`prod`) |
 | `DAHOKO_ENV`            | sync-server `deployment.environment` attribute (default `production`) | deploy env |
 | `DAHOKO_LOG_LEVEL`      | sync-server; `debug` also emits per-request events for 2xx  | deploy env |
 
@@ -29,6 +29,32 @@ explicit `define` block (see `vite.config.ts`) — deliberately not an
 `envPrefix`, so `POSTHOG_CLI_TOKEN` can never leak into a bundle. Android
 bakes the same two values into `BuildConfig` from env vars or the
 `posthogProjectToken` / `posthogHost` Gradle properties.
+
+## CI: secrets come from Infisical
+
+Infisical is the single source of truth; the release/deploy workflows fetch
+the `POSTHOG_*` values at runtime with
+[`Infisical/secrets-action`](https://github.com/Infisical/secrets-action)
+(machine identity, universal auth) instead of mirrored GitHub secrets. Every
+fetched value is masked in logs and exported to the following steps.
+
+One-time GitHub setup (repo → Settings):
+
+| Kind   | Name                      | Value |
+| ------ | ------------------------- | ----- |
+| secret | `INFISICAL_CLIENT_ID`     | Machine identity client id (Infisical → Access Control → Machine Identities, universal auth) |
+| secret | `INFISICAL_CLIENT_SECRET` | That identity's client secret |
+| var    | `INFISICAL_PROJECT_SLUG`  | The project's slug (Project Settings — not the workspace id in `.infisical.json`) |
+| var    | `INFISICAL_ENV_SLUG`      | Optional; defaults to `prod` |
+
+Give the machine identity read access to the project's `prod` environment.
+Until `INFISICAL_CLIENT_ID` exists, the fetch step is skipped and CI builds
+run with telemetry off — releases never break on missing telemetry config.
+
+The action exports **all** secrets at path `/` of the chosen environment; if
+that environment grows unrelated secrets, move the PostHog values into a
+folder and add `secret-path: /posthog` (or similar) to the three workflow
+steps to narrow what CI sees.
 
 ## Local development
 
