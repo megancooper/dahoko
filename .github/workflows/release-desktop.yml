@@ -103,6 +103,22 @@ jobs:
             exit 1
           }
 
+      - name: Verify macOS signing secrets
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            test -n "${!name}" || {
+              echo "$name is required to sign and notarize the macOS build"
+              exit 1
+            }
+          done
+
   publish:
     needs:
       - resolve-release
@@ -131,6 +147,9 @@ jobs:
     env:
       RELEASE_VERSION: ${{ inputs.version }}
       VITE_DAHOKO_SYNC_URL: ${{ vars.DAHOKO_SYNC_URL }}
+      # Hoisted so the Infisical step's `if` can test it; the secrets
+      # context is not allowed in step-level if expressions.
+      INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -174,7 +193,7 @@ jobs:
       # env vars for the build. Skipped until the machine identity bootstrap
       # secrets exist in GitHub; the build then runs with telemetry off.
       - name: Fetch telemetry secrets from Infisical
-        if: ${{ secrets.INFISICAL_CLIENT_ID != '' }}
+        if: ${{ env.INFISICAL_CLIENT_ID != '' }}
         uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
         with:
           client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
@@ -188,6 +207,16 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          # Developer ID signing + notarization, consumed by the Tauri bundler
+          # on the macos-latest runners (ignored elsewhere). APPLE_CERTIFICATE
+          # is the base64 .p12 export of the Developer ID Application cert;
+          # APPLE_PASSWORD is an app-specific password, not the account one.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: apps/desktop
           releaseId: ${{ needs.resolve-release.outputs.release_id }}
