@@ -75,6 +75,10 @@ interface SyncValue {
   lastSyncedAt: string | null;
   /** Plan state; null when the connected server has billing disabled. */
   billing: BillingState | null;
+  /** Passphrase generated for an account created in this session. Held in
+   * memory only, so the user can still copy it to a second device after the
+   * form has gone; cleared on disconnect, deletion, or session expiry. */
+  sessionPassphrase: string | null;
   connect: (input: ConnectSyncInput) => Promise<void>;
   disconnect: () => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
@@ -151,6 +155,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     () => loadSavedSyncConfig()?.lastSyncedAt ?? null,
   );
   const [billing, setBilling] = useState<BillingState | null>(null);
+  const [sessionPassphrase, setSessionPassphrase] = useState<string | null>(
+    null,
+  );
   const credentialsRef = useRef<ActiveCredentials | null>(null);
   const localStateRef = useRef<LocalSyncState | null>(null);
   const captureDataForSyncRef = useRef(captureDataForSync);
@@ -219,6 +226,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         localStateRef.current = null;
         setAccount(null);
         setBilling(null);
+        setSessionPassphrase(null);
         setStatus("disconnected");
         setMessage("Your session expired. Sign in again.");
       } else {
@@ -282,6 +290,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         localStateRef.current = await loadLocalSyncState(accountKey);
         credentialsRef.current = credentials;
         setAccount(normalized);
+        setSessionPassphrase(
+          input.mode === "register" ? input.encryptionPassphrase : null,
+        );
         try {
           setBilling(
             await getBillingState(normalized.serverUrl, auth.token),
@@ -309,6 +320,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         localStateRef.current = null;
         setAccount(null);
         setBilling(null);
+        setSessionPassphrase(null);
         setStatus("error");
         setMessage(messageForError(error));
         if (token) {
@@ -326,6 +338,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     localStateRef.current = null;
     setAccount(null);
     setBilling(null);
+    setSessionPassphrase(null);
     setStatus("disconnected");
     setMessage(
       "Disconnected. Your local data and encrypted server copy are unchanged.",
@@ -354,6 +367,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       localStateRef.current = null;
       setAccount(null);
       setBilling(null);
+      setSessionPassphrase(null);
       setLastSyncedAt(null);
       const nextConfig: SavedSyncConfig = {
         serverUrl: credentials.serverUrl,
@@ -446,6 +460,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       hostedServerUrl: HOSTED_SYNC_SERVER_URL,
       lastSyncedAt,
       billing,
+      sessionPassphrase,
       connect,
       disconnect,
       deleteAccount,
@@ -461,6 +476,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       savedConfig,
       lastSyncedAt,
       billing,
+      sessionPassphrase,
       connect,
       disconnect,
       deleteAccount,

@@ -51,8 +51,11 @@ it never receives the separate encryption passphrase.
 - Transport: HTTPS is required by the desktop app except for loopback
   development addresses.
 
-If the encryption passphrase is lost, the server copy cannot be recovered.
-Exporting a local Dahoko backup remains the recommended recovery path.
+The desktop app generates the encryption passphrase on-device when an account
+is created (five dash-separated groups from an unambiguous alphabet, ~122 bits)
+and shows it for copying; signing in on another device means typing that same
+passphrase. If it is lost, the server copy cannot be recovered. Exporting a
+local Dahoko backup remains the recommended recovery path.
 
 ## Conflict handling
 

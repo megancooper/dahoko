@@ -1,24 +1,136 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+  Check,
   CheckCircle2,
   Cloud,
+  Copy,
+  Eye,
+  EyeOff,
   ExternalLink,
+  KeyRound,
   LoaderCircle,
   LockKeyhole,
+  RefreshCw,
   Server,
   ShieldCheck,
   Sparkles,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
-import { Button, Input } from "@dahoko/ui";
+import { Button, Input, SegmentedControl } from "@dahoko/ui";
 import { useSync } from "@/state/sync";
+import { openExternal } from "@/lib/open-external";
+import { generateEncryptionPassphrase } from "@/sync/passphrase";
 
-function openExternal(url: string) {
-  // Inside the Tauri webview window.open routes through the shell; in the
-  // browser build it opens a tab. Callers also surface the URL as a link
-  // in case popups are blocked.
-  window.open(url, "_blank", "noopener,noreferrer");
+const SELF_HOSTING_DOCS_URL = "https://dahoko.com/docs/self-hosting";
+const HOSTED_PRICE = "$4/month or $40/year";
+
+type ConnectMode = "register" | "login";
+
+/** Clipboard writes need a secure context; the Tauri origin qualifies, but
+ * fall back to a selection copy so the button never silently does nothing. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.append(area);
+    area.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } finally {
+      area.remove();
+    }
+    return ok;
+  }
+}
+
+function useCopy() {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = window.setTimeout(() => setCopied(false), 2_000);
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
+  const copy = useCallback(async (text: string) => {
+    if (await copyText(text)) setCopied(true);
+  }, []);
+  return { copied, copy };
+}
+
+function ExternalTextLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="underline underline-offset-2"
+      onClick={(event) => {
+        event.preventDefault();
+        void openExternal(href).catch(() => {});
+      }}
+    >
+      {children}
+    </a>
+  );
+}
+
+/** Pricing shown before the account exists, so nobody discovers the
+ * subscription after signing up. */
+function PlanNotice({ hosted }: { hosted: boolean }) {
+  return (
+    <div className="rounded-md border border-border bg-background p-2.5">
+      <div className="flex items-center gap-2 text-[12px] font-medium">
+        {hosted ? (
+          <Sparkles
+            aria-hidden="true"
+            className="h-3.5 w-3.5 text-muted-foreground"
+          />
+        ) : (
+          <Server
+            aria-hidden="true"
+            className="h-3.5 w-3.5 text-muted-foreground"
+          />
+        )}
+        {hosted ? `Dahoko Cloud · ${HOSTED_PRICE}` : "Self-hosted server · free"}
+      </div>
+      {hosted ? (
+        <>
+          <p className="mt-1 pl-[22px] text-[11.5px] leading-relaxed text-muted-foreground">
+            Creating an account is free, but uploading from this device needs
+            a paid plan. You pick monthly or yearly after the account exists
+            and can cancel anytime. Downloading and deleting your data never
+            requires a subscription.
+          </p>
+          <p className="mt-1.5 pl-[22px] text-[11.5px] leading-relaxed text-muted-foreground">
+            Prefer free? Run the open-source sync server yourself and enter
+            its URL below.{" "}
+            <ExternalTextLink href={SELF_HOSTING_DOCS_URL}>
+              Self-hosting guide
+            </ExternalTextLink>
+            .
+          </p>
+        </>
+      ) : (
+        <p className="mt-1 pl-[22px] text-[11.5px] leading-relaxed text-muted-foreground">
+          You're connecting to your own server. Dahoko never bills for
+          self-hosted sync.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function BillingSection() {
@@ -62,6 +174,15 @@ function BillingSection() {
     }
   };
 
+  const checkout = (interval: "monthly" | "yearly") =>
+    run(async () => {
+      const url = await startCheckout(interval);
+      // Keep the fallback link even if the OS handoff fails, so the user can
+      // still reach checkout.
+      setCheckoutUrl(url);
+      await openExternal(url);
+    });
+
   return (
     <div className="mt-3 rounded-md border border-border bg-background p-2.5">
       <div className="flex items-center gap-2 text-[12px] font-medium">
@@ -102,7 +223,7 @@ function BillingSection() {
       ) : (
         <p className="mt-1.5 pl-[22px] text-[11.5px] leading-relaxed text-muted-foreground">
           Upgrade to sync this account across devices on hosted,
-          end-to-end-encrypted Dahoko Cloud. $4/month or $40/year.
+          end-to-end-encrypted Dahoko Cloud. {HOSTED_PRICE}, cancel anytime.
         </p>
       )}
 
@@ -115,7 +236,7 @@ function BillingSection() {
             disabled={busy}
             onClick={() =>
               void run(async () => {
-                openExternal(await openBillingPortal());
+                await openExternal(await openBillingPortal());
               })
             }
           >
@@ -128,13 +249,7 @@ function BillingSection() {
               type="button"
               size="sm"
               disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  const url = await startCheckout("monthly");
-                  setCheckoutUrl(url);
-                  openExternal(url);
-                })
-              }
+              onClick={() => void checkout("monthly")}
             >
               Upgrade · $4/mo
             </Button>
@@ -143,13 +258,7 @@ function BillingSection() {
               size="sm"
               variant="outline"
               disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  const url = await startCheckout("yearly");
-                  setCheckoutUrl(url);
-                  openExternal(url);
-                })
-              }
+              onClick={() => void checkout("yearly")}
             >
               $40/yr · 2 months free
             </Button>
@@ -172,16 +281,9 @@ function BillingSection() {
 
       {checkoutUrl && !active ? (
         <p className="mt-2 pl-[22px] text-[11px] leading-relaxed text-muted-foreground">
-          Checkout opened in your browser. If it didn’t,{" "}
-          <a
-            href={checkoutUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="underline underline-offset-2"
-          >
-            open it here
-          </a>
-          . Your plan refreshes automatically when you return.
+          Checkout opened in your browser. If it didn't,{" "}
+          <ExternalTextLink href={checkoutUrl}>open it here</ExternalTextLink>.
+          Your plan refreshes automatically when you return.
         </p>
       ) : null}
 
@@ -197,6 +299,63 @@ function BillingSection() {
   );
 }
 
+/** Shown after an account was created in this session, so the passphrase can
+ * still be copied to a second device once the form is gone. */
+function SessionPassphrase({ passphrase }: { passphrase: string }) {
+  const [revealed, setRevealed] = useState(false);
+  const { copied, copy } = useCopy();
+  return (
+    <div className="mt-3 rounded-md border border-border bg-background p-2.5">
+      <div className="flex items-center gap-2 text-[12px] font-medium">
+        <KeyRound
+          aria-hidden="true"
+          className="h-3.5 w-3.5 text-muted-foreground"
+        />
+        Encryption passphrase
+      </div>
+      <p className="mt-1 pl-[22px] text-[11.5px] leading-relaxed text-muted-foreground">
+        Save this now: you need it to sign in on another device, and it
+        disappears when you disconnect or quit. Nobody can recover it.
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2 pl-[22px]">
+        <code
+          aria-label={revealed ? "Encryption passphrase" : "Passphrase hidden"}
+          className="rounded-md border border-border bg-muted px-2 py-1 font-mono text-[12px] tracking-wide"
+        >
+          {revealed ? passphrase : "•••••-•••••-•••••-•••••-•••••"}
+        </code>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          aria-pressed={revealed}
+          onClick={() => setRevealed((value) => !value)}
+        >
+          {revealed ? (
+            <EyeOff aria-hidden="true" className="h-3.5 w-3.5" />
+          ) : (
+            <Eye aria-hidden="true" className="h-3.5 w-3.5" />
+          )}
+          {revealed ? "Hide" : "Show"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => void copy(passphrase)}
+        >
+          {copied ? (
+            <Check aria-hidden="true" className="h-3.5 w-3.5" />
+          ) : (
+            <Copy aria-hidden="true" className="h-3.5 w-3.5" />
+          )}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function SyncSettings() {
   const {
     status,
@@ -205,31 +364,38 @@ export function SyncSettings() {
     savedConfig,
     hostedServerUrl,
     lastSyncedAt,
+    sessionPassphrase,
     connect,
     disconnect,
     deleteAccount,
     syncNow,
   } = useSync();
+  const [mode, setMode] = useState<ConnectMode>(() =>
+    savedConfig?.email ? "login" : "register",
+  );
   const [serverUrl, setServerUrl] = useState(
     savedConfig?.serverUrl || hostedServerUrl,
   );
   const [email, setEmail] = useState(savedConfig?.email ?? "");
   const [password, setPassword] = useState("");
-  const [encryptionPassphrase, setEncryptionPassphrase] = useState("");
+  const [loginPassphrase, setLoginPassphrase] = useState("");
+  const [generatedPassphrase, setGeneratedPassphrase] = useState(
+    generateEncryptionPassphrase,
+  );
+  const { copied, copy } = useCopy();
   const [showDelete, setShowDelete] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
-  const [pendingMode, setPendingMode] = useState<
-    "register" | "login" | null
-  >(null);
+  const [pendingMode, setPendingMode] = useState<ConnectMode | null>(null);
   const busy =
     status === "connecting" || status === "syncing" || pendingMode !== null;
+  const hosted = Boolean(hostedServerUrl) && serverUrl.trim() === hostedServerUrl;
 
   useEffect(() => {
     if (savedConfig?.serverUrl) setServerUrl(savedConfig.serverUrl);
     if (savedConfig?.email) setEmail(savedConfig.email);
   }, [savedConfig?.email, savedConfig?.serverUrl]);
 
-  const submit = async (mode: "register" | "login") => {
+  const submit = async () => {
     if (pendingMode) return;
     setPendingMode(mode);
     try {
@@ -238,10 +404,14 @@ export function SyncSettings() {
         serverUrl,
         email,
         password,
-        encryptionPassphrase,
+        encryptionPassphrase:
+          mode === "register" ? generatedPassphrase : loginPassphrase,
       });
       setPassword("");
-      setEncryptionPassphrase("");
+      setLoginPassphrase("");
+      // The passphrase now lives with the account for this session; give the
+      // next registration a fresh one.
+      setGeneratedPassphrase(generateEncryptionPassphrase());
     } catch (error) {
       // The provider surfaces a safe, actionable message in this section;
       // keep the raw failure on the console for debugging.
@@ -318,6 +488,10 @@ export function SyncSettings() {
               ) : null}
             </span>
           </div>
+
+          {sessionPassphrase ? (
+            <SessionPassphrase passphrase={sessionPassphrase} />
+          ) : null}
 
           <BillingSection />
 
@@ -407,15 +581,30 @@ export function SyncSettings() {
           className="mt-3"
           onSubmit={(event) => {
             event.preventDefault();
-            void submit("login");
+            void submit();
           }}
         >
-          {hostedServerUrl && serverUrl !== hostedServerUrl ? (
+          <PlanNotice hosted={hosted} />
+
+          <SegmentedControl<ConnectMode>
+            aria-label="Account action"
+            size="sm"
+            className="mt-3"
+            value={mode}
+            onValueChange={setMode}
+            disabled={busy}
+            options={[
+              { value: "register", label: "Create account" },
+              { value: "login", label: "Sign in" },
+            ]}
+          />
+
+          {hostedServerUrl && !hosted ? (
             <Button
               type="button"
               size="sm"
               variant="outline"
-              className="mb-3"
+              className="mt-3"
               onClick={() => setServerUrl(hostedServerUrl)}
             >
               <Cloud aria-hidden="true" className="h-3.5 w-3.5" />
@@ -423,7 +612,7 @@ export function SyncSettings() {
             </Button>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="mt-3 grid grid-cols-2 gap-2.5">
             <label className="col-span-2 block">
               <span className="mb-1 flex items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground">
                 <Server aria-hidden="true" className="h-3 w-3" />
@@ -457,40 +646,94 @@ export function SyncSettings() {
               />
             </label>
 
-            <label className="block">
+            <label className="col-span-2 block">
               <span className="mb-1 block text-[11.5px] font-medium text-muted-foreground">
                 Account password
               </span>
               <Input
                 type="password"
-                autoComplete="current-password"
+                autoComplete={
+                  mode === "register" ? "new-password" : "current-password"
+                }
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 disabled={busy}
               />
             </label>
 
-            <label className="block">
-              <span className="mb-1 block text-[11.5px] font-medium text-muted-foreground">
-                Encryption passphrase
-              </span>
-              <Input
-                type="password"
-                autoComplete="off"
-                value={encryptionPassphrase}
-                onChange={(event) =>
-                  setEncryptionPassphrase(event.target.value)
-                }
-                disabled={busy}
-              />
-            </label>
+            {mode === "register" ? (
+              <div className="col-span-2">
+                <span className="mb-1 block text-[11.5px] font-medium text-muted-foreground">
+                  Encryption passphrase
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    type="text"
+                    readOnly
+                    aria-label="Generated encryption passphrase"
+                    className="min-w-0 flex-1 font-mono text-[12.5px] tracking-wide"
+                    value={generatedPassphrase}
+                    onFocus={(event) => event.target.select()}
+                    disabled={busy}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-9"
+                    disabled={busy}
+                    onClick={() => void copy(generatedPassphrase)}
+                  >
+                    {copied ? (
+                      <Check aria-hidden="true" className="h-3.5 w-3.5" />
+                    ) : (
+                      <Copy aria-hidden="true" className="h-3.5 w-3.5" />
+                    )}
+                    {copied ? "Copied" : "Copy"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-9"
+                    disabled={busy}
+                    onClick={() =>
+                      setGeneratedPassphrase(generateEncryptionPassphrase())
+                    }
+                  >
+                    <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
+                    Regenerate
+                  </Button>
+                </div>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                  Generated on this device; it never leaves it. Save it in your
+                  password manager: you'll type it to sign in on another
+                  device, and nobody can recover it if it's lost.
+                </p>
+              </div>
+            ) : (
+              <label className="col-span-2 block">
+                <span className="mb-1 block text-[11.5px] font-medium text-muted-foreground">
+                  Encryption passphrase
+                </span>
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="font-mono"
+                  value={loginPassphrase}
+                  onChange={(event) => setLoginPassphrase(event.target.value)}
+                  disabled={busy}
+                />
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                  The passphrase shown when this account was created. It's
+                  only used on this device to unlock your encrypted data.
+                </p>
+              </label>
+            )}
           </div>
-
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            Use two different secrets. Your encryption passphrase never leaves
-            this device and is remembered only for this app session. If you
-            lose it, nobody can recover the encrypted server copy.
-          </p>
 
           <div
             role={status === "error" ? "alert" : "status"}
@@ -507,30 +750,21 @@ export function SyncSettings() {
 
           <div className="mt-3 flex flex-wrap gap-2">
             <Button type="submit" size="sm" disabled={busy}>
-              {pendingMode === "login" ? (
+              {pendingMode ? (
                 <LoaderCircle
                   aria-hidden="true"
                   className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
                 />
               ) : null}
-              {pendingMode === "login" ? "Connecting…" : "Sign in & sync"}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => void submit("register")}
-            >
-              {pendingMode === "register" ? (
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
-                />
-              ) : null}
-              {pendingMode === "register"
-                ? "Creating account…"
-                : "Create account"}
+              {mode === "register"
+                ? pendingMode
+                  ? "Creating account…"
+                  : hosted
+                    ? "Create free account"
+                    : "Create account"
+                : pendingMode
+                  ? "Connecting…"
+                  : "Sign in & sync"}
             </Button>
           </div>
         </form>

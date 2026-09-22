@@ -704,7 +704,7 @@ function EncryptedSync({ onNavigate }: { onNavigate: (path: string) => void }) {
           steps={[
             ["Open Settings", "Select Sync and choose the hosted or self-hosted server URL."],
             ["Create or sign in", "Use an email and account password to authenticate."],
-            ["Enter the encryption passphrase", "Use the same passphrase on every device."],
+            ["Save the encryption passphrase", "Dahoko generates one when you create the account. Copy it somewhere safe; you type it when signing in on another device."],
             ["Run the first sync", "Dahoko merges workspaces and records the encrypted result."],
           ]}
         />
