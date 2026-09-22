@@ -81,7 +81,7 @@ so they are filterable out of production views.
   client-side records carry distinct id + session id automatically.
 - **Wide request events** — the sync-server emits one `http_request` per
   request (requestId, method, path, status, durationMs): warn for 5xx, info
-  for 4xx, debug otherwise.
+  for 4xx except 404, debug otherwise (404s are scanner noise).
 - **Expected-vs-bug split** — 4xx sync/API rejections log as warnings without
   an exception report; only 5xx/unknown failures create error-tracking issues.
 

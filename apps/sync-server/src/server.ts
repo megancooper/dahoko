@@ -617,11 +617,16 @@ export function createSyncServer(options: SyncServerOptions): SyncServer {
         });
       }
     } finally {
-      // One wide event per request; 2xx/3xx stay at debug so the default
-      // info level only ships actionable traffic.
+      // One wide event per request; 2xx/3xx and 404s stay at debug so the
+      // default info level only ships actionable traffic (404s are almost
+      // entirely scanner noise probing for .env / phpinfo.php).
       const status = response.statusCode;
       const level =
-        status >= 500 ? "warn" : status >= 400 ? "info" : "debug";
+        status >= 500
+          ? "warn"
+          : status >= 400 && status !== 404
+            ? "info"
+            : "debug";
       log[level]("http_request", {
         requestId,
         method: request.method,
