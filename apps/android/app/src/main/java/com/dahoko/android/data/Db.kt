@@ -8,6 +8,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
+import androidx.room.Upsert
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
@@ -184,22 +185,26 @@ interface DahokoDao {
     @Query("SELECT * FROM task_completions ORDER BY due_date, id")
     suspend fun allCompletions(): List<CompletionEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    // @Upsert does INSERT ... ON CONFLICT DO UPDATE. The previous
+    // @Insert(REPLACE) deleted the row and re-inserted it, which fired the
+    // ON DELETE CASCADE foreign keys and silently wiped a task's subtasks and
+    // completions on every edit.
+    @Upsert
     suspend fun upsertWorkspace(workspace: WorkspaceEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertList(list: ListEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertStatus(status: StatusEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertTask(task: TaskEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertSubtask(subtask: SubtaskEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertCompletion(completion: CompletionEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

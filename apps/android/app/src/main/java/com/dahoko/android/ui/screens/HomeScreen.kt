@@ -1,11 +1,22 @@
 package com.dahoko.android.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,12 +26,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Repeat
@@ -42,6 +62,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.runtime.Composable
@@ -57,10 +78,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dahoko.android.data.ListEntity
+import com.dahoko.android.data.StatusEntity
 import com.dahoko.android.data.TaskEntity
 import com.dahoko.android.domain.Recurrence
 import com.dahoko.android.ui.AppViewModel
@@ -69,15 +93,6 @@ import com.dahoko.android.ui.theme.priorityColor
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
-
-private fun parseColor(hex: String): Color = try {
-    Color(android.graphics.Color.parseColor(hex))
-} catch (error: IllegalArgumentException) {
-    Color.Gray
-}
-
-private fun dueDateOf(task: TaskEntity): LocalDate? =
-    task.dueAt?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -111,247 +126,294 @@ fun HomeScreen(viewModel: AppViewModel, onOpenSettings: () -> Unit) {
         is HomeView.InList -> lists.firstOrNull { it.id == v.listId }?.name ?: "List"
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet {
-                Column(Modifier.padding(vertical = 12.dp)) {
-                    val workspace = workspaces.firstOrNull { it.id == workspaceId }
-                    // Brand header: the same pastel-blue check mark that opens
-                    // the desktop app and the website.
-                    Row(
-                        Modifier.padding(horizontal = 28.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            Modifier
-                                .size(32.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.shapes.small,
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Filled.Check,
-                                null,
-                                Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                            )
-                        }
-                        Spacer(Modifier.size(12.dp))
-                        Text(
-                            "dahoko",
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                    }
-                    Row(
-                        Modifier.padding(horizontal = 28.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            Modifier
-                                .size(10.dp)
-                                .background(parseColor(workspace?.color ?: "#A3D0FF"), CircleShape),
-                        )
-                        Spacer(Modifier.size(10.dp))
-                        Text(
-                            (workspace?.name ?: "Workspace").uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (workspaces.size > 1) {
-                        workspaces.filter { it.id != workspaceId }.forEach { other ->
-                            NavigationDrawerItem(
-                                label = { Text(other.name) },
-                                selected = false,
-                                onClick = {
-                                    viewModel.selectWorkspace(other.id)
-                                    scope.launch { drawerState.close() }
-                                },
-                                icon = {
-                                    Box(
-                                        Modifier
-                                            .size(10.dp)
-                                            .background(parseColor(other.color), CircleShape),
-                                    )
-                                },
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                            )
-                        }
-                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                    }
-                    NavigationDrawerItem(
-                        label = { Text("Today") },
-                        icon = { Icon(Icons.Filled.Today, null) },
-                        selected = view == HomeView.Today,
-                        onClick = {
-                            viewModel.selectView(HomeView.Today)
-                            scope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                    )
-                    NavigationDrawerItem(
-                        label = { Text("Upcoming") },
-                        icon = { Icon(Icons.Filled.CalendarMonth, null) },
-                        selected = view == HomeView.Upcoming,
-                        onClick = {
-                            viewModel.selectView(HomeView.Upcoming)
-                            scope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                    )
-                    NavigationDrawerItem(
-                        label = { Text("All tasks") },
-                        icon = { Icon(Icons.Filled.Inbox, null) },
-                        selected = view == HomeView.All,
-                        onClick = {
-                            viewModel.selectView(HomeView.All)
-                            scope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                    )
-                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                    Row(
+    Box(Modifier.fillMaxSize()) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet {
+                    // Scrollable so a long list of lists is reachable on short screens.
+                    Column(
                         Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 28.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                            .verticalScroll(rememberScrollState())
+                            .padding(vertical = 12.dp),
                     ) {
-                        Text(
-                            "LISTS",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        IconButton(onClick = { showNewList = true }) {
-                            Icon(Icons.Filled.Add, "New list")
-                        }
-                    }
-                    lists.forEach { list ->
-                        NavigationDrawerItem(
-                            label = { Text(list.name) },
-                            icon = {
-                                Box(
-                                    Modifier
-                                        .size(10.dp)
-                                        .background(parseColor(list.color), CircleShape),
+                        val workspace = workspaces.firstOrNull { it.id == workspaceId }
+                        // Brand header: the same pastel-blue check mark that opens
+                        // the desktop app and the website.
+                        Row(
+                            Modifier.padding(horizontal = 28.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(32.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.primary,
+                                        MaterialTheme.shapes.small,
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    null,
+                                    Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimary,
                                 )
-                            },
-                            selected = (view as? HomeView.InList)?.listId == list.id,
+                            }
+                            Spacer(Modifier.size(12.dp))
+                            Text(
+                                "dahoko",
+                                style = MaterialTheme.typography.titleLarge,
+                            )
+                        }
+                        Row(
+                            Modifier.padding(horizontal = 28.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(10.dp)
+                                    .background(parseHexColor(workspace?.color ?: "#A3D0FF"), CircleShape),
+                            )
+                            Spacer(Modifier.size(10.dp))
+                            Text(
+                                (workspace?.name ?: "Workspace").uppercase(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (workspaces.size > 1) {
+                            workspaces.filter { it.id != workspaceId }.forEach { other ->
+                                NavigationDrawerItem(
+                                    label = { Text(other.name) },
+                                    selected = false,
+                                    onClick = {
+                                        viewModel.selectWorkspace(other.id)
+                                        scope.launch { drawerState.close() }
+                                    },
+                                    icon = {
+                                        Box(
+                                            Modifier
+                                                .size(10.dp)
+                                                .background(parseHexColor(other.color), CircleShape),
+                                        )
+                                    },
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                )
+                            }
+                            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        }
+                        NavigationDrawerItem(
+                            label = { Text("Today") },
+                            icon = { Icon(Icons.Filled.Today, null) },
+                            selected = view == HomeView.Today,
                             onClick = {
-                                viewModel.selectView(HomeView.InList(list.id))
+                                viewModel.selectView(HomeView.Today)
                                 scope.launch { drawerState.close() }
                             },
                             modifier = Modifier.padding(horizontal = 12.dp),
                         )
-                    }
-                    if (lists.isEmpty()) {
-                        Text(
-                            "No lists yet",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp),
+                        NavigationDrawerItem(
+                            label = { Text("Upcoming") },
+                            icon = { Icon(Icons.Filled.CalendarMonth, null) },
+                            selected = view == HomeView.Upcoming,
+                            onClick = {
+                                viewModel.selectView(HomeView.Upcoming)
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.padding(horizontal = 12.dp),
                         )
-                    }
-                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                    NavigationDrawerItem(
-                        label = { Text("Settings") },
-                        icon = { Icon(Icons.Filled.Settings, null) },
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            onOpenSettings()
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                    )
-                }
-            }
-        },
-    ) {
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbar) },
-            topBar = {
-                TopAppBar(
-                    title = { Text(viewTitle) },
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Filled.Menu, "Menu")
-                        }
-                    },
-                    actions = {
-                        if (syncState.config != null) {
-                            if (syncState.syncing) {
-                                CircularProgressIndicator(
-                                    Modifier
-                                        .padding(horizontal = 14.dp)
-                                        .size(22.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                            } else {
-                                IconButton(onClick = { viewModel.syncNow() }) {
-                                    Icon(Icons.Filled.Sync, "Sync now")
-                                }
+                        NavigationDrawerItem(
+                            label = { Text("All tasks") },
+                            icon = { Icon(Icons.Filled.Inbox, null) },
+                            selected = view == HomeView.All,
+                            onClick = {
+                                viewModel.selectView(HomeView.All)
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 28.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "LISTS",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            IconButton(onClick = { showNewList = true }) {
+                                Icon(Icons.Filled.Add, "New list")
                             }
                         }
-                    },
-                )
-            },
-            floatingActionButton = {
-                FloatingActionButton(
-                    onClick = { showQuickAdd = true },
-                    modifier = Modifier.border(
-                        1.dp,
-                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.28f),
-                        MaterialTheme.shapes.large,
-                    ),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = MaterialTheme.shapes.large,
-                ) {
-                    Icon(Icons.Filled.Add, "Add task")
+                        lists.forEach { list ->
+                            NavigationDrawerItem(
+                                label = { Text(list.name) },
+                                icon = {
+                                    Box(
+                                        Modifier
+                                            .size(10.dp)
+                                            .background(parseHexColor(list.color), CircleShape),
+                                    )
+                                },
+                                selected = (view as? HomeView.InList)?.listId == list.id,
+                                onClick = {
+                                    viewModel.selectView(HomeView.InList(list.id))
+                                    scope.launch { drawerState.close() }
+                                },
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                            )
+                        }
+                        if (lists.isEmpty()) {
+                            Text(
+                                "No lists yet",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp),
+                            )
+                        }
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        NavigationDrawerItem(
+                            label = { Text("Settings") },
+                            icon = { Icon(Icons.Filled.Settings, null) },
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                onOpenSettings()
+                            },
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                    }
                 }
             },
-        ) { padding ->
-            TaskListContent(
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-                view = view,
-                tasks = tasks,
-                statusesById = statuses.associateBy { it.id },
-                doneStatusIds = statuses.filter { it.isDone }.map { it.id }.toSet(),
+        ) {
+            val openCount = tasks.count { it.completedAt == null }
+            val subtitle = when (val v = view) {
+                HomeView.Today -> LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, MMMM d"))
+                HomeView.Upcoming -> "Scheduled ahead"
+                HomeView.All -> "$openCount open"
+                is HomeView.InList -> "${tasks.count { it.completedAt == null && it.listId == v.listId }} open"
+            }
+            Scaffold(
+                containerColor = pageBackground(),
+                snackbarHost = { SnackbarHost(snackbar) },
+                topBar = {
+                    TopAppBar(
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = pageBackground()),
+                        title = {
+                            Column {
+                                Text(viewTitle, style = MaterialTheme.typography.titleLarge)
+                                Text(
+                                    subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(Icons.Filled.Menu, "Menu")
+                            }
+                        },
+                        actions = {
+                            if (syncState.config != null) {
+                                if (syncState.syncing) {
+                                    CircularProgressIndicator(
+                                        Modifier
+                                            .padding(horizontal = 14.dp)
+                                            .size(22.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    IconButton(onClick = { viewModel.syncNow() }) {
+                                        Icon(Icons.Filled.Sync, "Sync now")
+                                    }
+                                }
+                            }
+                        },
+                    )
+                },
+                floatingActionButton = {
+                    FloatingActionButton(
+                        onClick = { showQuickAdd = true },
+                        modifier = Modifier.border(
+                            1.dp,
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.28f),
+                            MaterialTheme.shapes.large,
+                        ),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        shape = MaterialTheme.shapes.large,
+                    ) {
+                        Icon(Icons.Filled.Add, "Add task")
+                    }
+                },
+            ) { padding ->
+                TaskListContent(
+                    modifier = Modifier
+                        .padding(padding)
+                        .fillMaxSize(),
+                    view = view,
+                    tasks = tasks,
+                    statusesById = statuses.associateBy { it.id },
+                    doneStatusIds = statuses.filter { it.isDone }.map { it.id }.toSet(),
+                    listsById = lists.associateBy { it.id },
+                    tags = tags,
+                    subtaskCounts = subtasks.groupBy { it.taskId }
+                        .mapValues { (_, rows) -> rows.count { it.done } to rows.size },
+                    onToggle = viewModel::toggleComplete,
+                    onOpen = { editingTaskId = it.id },
+                )
+            }
+        }
+
+        if (showQuickAdd) {
+            QuickAddSheet(
+                viewModel = viewModel,
                 listsById = lists.associateBy { it.id },
-                tags = tags,
-                subtaskCounts = subtasks.groupBy { it.taskId }
-                    .mapValues { (_, rows) -> rows.count { it.done } to rows.size },
-                onToggle = viewModel::toggleComplete,
-                onOpen = { editingTaskId = it.id },
+                onDismiss = { showQuickAdd = false },
             )
         }
-    }
 
-    if (showQuickAdd) {
-        QuickAddSheet(
-            viewModel = viewModel,
-            listsById = lists.associateBy { it.id },
-            onDismiss = { showQuickAdd = false },
-        )
-    }
-
-    editingTaskId?.let { taskId ->
-        tasks.firstOrNull { it.id == taskId }?.let { task ->
-            TaskDetailSheet(
-                viewModel = viewModel,
-                task = task,
-                taskTags = tags[task.id] ?: emptyList(),
-                lists = lists,
-                statuses = statuses,
-                subtasks = subtasks.filter { it.taskId == task.id },
-                onDismiss = { editingTaskId = null },
-            )
-        } ?: run { editingTaskId = null }
+        // Nested task detail page: slides in over the list from the right and
+        // slides back out on back / close. Keyed by task id so edits to the open
+        // task recompose in place instead of re-running the transition.
+        val editingTask = editingTaskId?.let { id -> tasks.firstOrNull { it.id == id } }
+        LaunchedEffect(editingTaskId, editingTask) {
+            if (editingTaskId != null && editingTask == null) editingTaskId = null
+        }
+        AnimatedContent(
+            targetState = editingTask,
+            contentKey = { it?.id },
+            transitionSpec = {
+                if (targetState != null) {
+                    (slideInHorizontally(tween(260)) { it } + fadeIn(tween(200))) togetherWith
+                        fadeOut(tween(120))
+                } else {
+                    fadeIn(tween(120)) togetherWith
+                        (slideOutHorizontally(tween(220)) { it } + fadeOut(tween(200)))
+                }
+            },
+            label = "taskDetail",
+        ) { task ->
+            if (task != null) {
+                TaskDetailScreen(
+                    viewModel = viewModel,
+                    task = task,
+                    taskTags = tags[task.id] ?: emptyList(),
+                    lists = lists,
+                    statuses = statuses,
+                    subtasks = subtasks.filter { it.taskId == task.id },
+                    onBack = { editingTaskId = null },
+                )
+            } else {
+                Box(Modifier.fillMaxSize())
+            }
+        }
     }
 
     if (showNewList) {
@@ -365,14 +427,17 @@ fun HomeScreen(viewModel: AppViewModel, onOpenSettings: () -> Unit) {
     }
 }
 
+/** How a row shows its due date, given what the section header already says. */
+private enum class DateMode { Full, TimeOnly }
+
 @Composable
 private fun TaskListContent(
     modifier: Modifier,
     view: HomeView,
     tasks: List<TaskEntity>,
-    statusesById: Map<String, com.dahoko.android.data.StatusEntity>,
+    statusesById: Map<String, StatusEntity>,
     doneStatusIds: Set<String>,
-    listsById: Map<String, com.dahoko.android.data.ListEntity>,
+    listsById: Map<String, ListEntity>,
     tags: Map<String, List<String>>,
     subtaskCounts: Map<String, Pair<Int, Int>>,
     onToggle: (TaskEntity) -> Unit,
@@ -399,15 +464,7 @@ private fun TaskListContent(
             val byDay = upcoming.groupBy { dueDateOf(it)!! }
             byDay.entries
                 .sortedBy { it.key }
-                .map { (day, dayTasks) ->
-                    val label = when {
-                        day == today.plusDays(1) -> "Tomorrow"
-                        day < today.plusDays(7) ->
-                            day.format(DateTimeFormatter.ofPattern("EEEE"))
-                        else -> day.format(DateTimeFormatter.ofPattern("MMM d"))
-                    }
-                    label to dayTasks
-                }
+                .map { (day, dayTasks) -> friendlyDay(day, today, long = true) to dayTasks }
         }
         HomeView.All -> statusesById.values
             .sortedBy { it.sortOrder }
@@ -431,100 +488,114 @@ private fun TaskListContent(
         HomeView.Upcoming -> emptyList()
     }
 
+    val dateMode = when (view) {
+        HomeView.Today, HomeView.Upcoming -> DateMode.TimeOnly
+        HomeView.All, is HomeView.InList -> DateMode.Full
+    }
+    val showList = view !is HomeView.InList
+    val cardColor = groupCardColor()
     var showCompleted by rememberSaveable { mutableStateOf(false) }
 
-    LazyColumn(modifier, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp)) {
+    LazyColumn(
+        modifier,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 112.dp),
+    ) {
         val isEmpty = sections.all { it.second.isEmpty() } && completedVisible.isEmpty()
         if (isEmpty) {
-            item {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 120.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Icon(
-                        Icons.Filled.Check,
-                        null,
-                        Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.outlineVariant,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "All clear",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "Tap + to add a task",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
-            }
+            item(key = "empty") { EmptyState(view) }
         }
         sections.forEach { (title, sectionTasks) ->
             if (sectionTasks.isNotEmpty()) {
+                val overdue = title == "Overdue"
                 item(key = "header-$title") {
-                    Text(
-                        title.uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (title == "Overdue") {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp),
+                    SectionHeader(
+                        title = title,
+                        count = sectionTasks.size,
+                        highlight = overdue,
+                        modifier = Modifier.animateItem(),
                     )
                 }
-                items(sectionTasks, key = { it.id }) { task ->
-                    TaskRow(
-                        task = task,
-                        overdue = title == "Overdue",
-                        listName = task.listId?.let { listsById[it] },
-                        taskTags = tags[task.id] ?: emptyList(),
-                        subtaskCount = subtaskCounts[task.id],
-                        statusColor = statusesById[task.statusId]?.color,
-                        onToggle = { onToggle(task) },
-                        onOpen = { onOpen(task) },
-                    )
+                itemsIndexed(sectionTasks, key = { _, task -> task.id }) { index, task ->
+                    GroupedRow(
+                        first = index == 0,
+                        last = index == sectionTasks.lastIndex,
+                        color = cardColor,
+                        modifier = Modifier.animateItem(),
+                    ) {
+                        TaskRow(
+                            task = task,
+                            today = today,
+                            overdue = overdue,
+                            dateMode = if (overdue) DateMode.Full else dateMode,
+                            list = task.listId?.let { listsById[it] },
+                            showList = showList,
+                            taskTags = tags[task.id] ?: emptyList(),
+                            subtaskCount = subtaskCounts[task.id],
+                            onToggle = { onToggle(task) },
+                            onOpen = { onOpen(task) },
+                        )
+                    }
                 }
             }
         }
         if (completedVisible.isNotEmpty()) {
             item(key = "completed-header") {
+                val rotation by animateFloatAsState(
+                    if (showCompleted) 180f else 0f,
+                    label = "completedChevron",
+                )
                 Row(
                     Modifier
+                        .animateItem()
                         .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.small)
                         .clickable { showCompleted = !showCompleted }
-                        .padding(start = 20.dp, top = 20.dp, bottom = 4.dp, end = 20.dp),
+                        .padding(start = 4.dp, end = 4.dp, top = 22.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "COMPLETED · ${completedVisible.size}",
+                        "COMPLETED",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.size(6.dp))
                     Text(
-                        if (showCompleted) "Hide" else "Show",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                        "${completedVisible.size}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Icon(
+                        Icons.Filled.ExpandMore,
+                        if (showCompleted) "Hide completed" else "Show completed",
+                        Modifier
+                            .size(18.dp)
+                            .rotate(rotation),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             if (showCompleted) {
-                items(completedVisible, key = { "done-${it.id}" }) { task ->
-                    TaskRow(
-                        task = task,
-                        overdue = false,
-                        listName = task.listId?.let { listsById[it] },
-                        taskTags = tags[task.id] ?: emptyList(),
-                        subtaskCount = subtaskCounts[task.id],
-                        statusColor = statusesById[task.statusId]?.color,
-                        onToggle = { onToggle(task) },
-                        onOpen = { onOpen(task) },
-                    )
+                itemsIndexed(completedVisible, key = { _, task -> "done-${task.id}" }) { index, task ->
+                    GroupedRow(
+                        first = index == 0,
+                        last = index == completedVisible.lastIndex,
+                        color = cardColor,
+                        modifier = Modifier.animateItem(),
+                    ) {
+                        TaskRow(
+                            task = task,
+                            today = today,
+                            overdue = false,
+                            dateMode = DateMode.Full,
+                            list = task.listId?.let { listsById[it] },
+                            showList = showList,
+                            taskTags = tags[task.id] ?: emptyList(),
+                            subtaskCount = subtaskCounts[task.id],
+                            onToggle = { onToggle(task) },
+                            onOpen = { onOpen(task) },
+                        )
+                    }
                 }
             }
         }
@@ -532,59 +603,146 @@ private fun TaskListContent(
 }
 
 @Composable
+private fun SectionHeader(
+    title: String,
+    count: Int,
+    highlight: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, top = 18.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            title.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (highlight) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+        Spacer(Modifier.size(6.dp))
+        Text(
+            "$count",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (highlight) {
+                MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+            } else {
+                MaterialTheme.colorScheme.outline
+            },
+        )
+    }
+}
+
+/**
+ * One row of a grouped card: rounded on the outer corners of the first and
+ * last rows, hairline-divided in between, so a section reads as one surface.
+ */
+@Composable
+private fun GroupedRow(
+    first: Boolean,
+    last: Boolean,
+    color: Color,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val r = GroupCardRadius
+    val shape = RoundedCornerShape(
+        topStart = if (first) r else 0.dp,
+        topEnd = if (first) r else 0.dp,
+        bottomStart = if (last) r else 0.dp,
+        bottomEnd = if (last) r else 0.dp,
+    )
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(color),
+    ) {
+        content()
+        if (!last) {
+            HorizontalDivider(
+                Modifier.padding(start = 54.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyState(view: HomeView) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 120.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier
+                .size(64.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Check,
+                null,
+                Modifier.size(30.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("All clear", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            when (view) {
+                HomeView.Today -> "Nothing due today."
+                HomeView.Upcoming -> "Nothing scheduled ahead."
+                else -> "Tap + to add a task."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 private fun TaskRow(
     task: TaskEntity,
+    today: LocalDate,
     overdue: Boolean,
-    listName: com.dahoko.android.data.ListEntity?,
+    dateMode: DateMode,
+    list: ListEntity?,
+    showList: Boolean,
     taskTags: List<String>,
     subtaskCount: Pair<Int, Int>?,
-    statusColor: String?,
     onToggle: () -> Unit,
     onOpen: () -> Unit,
 ) {
     val done = task.completedAt != null
+    val accent = priorityColor(task.priority) ?: MaterialTheme.colorScheme.outline
     Row(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onOpen)
-            .padding(start = 8.dp, end = 20.dp, top = 4.dp, bottom = 4.dp)
-            .alpha(if (done) 0.65f else 1f),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(start = 6.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)
+            .alpha(if (done) 0.6f else 1f),
+        verticalAlignment = Alignment.Top,
     ) {
-        val accent = priorityColor(task.priority) ?: MaterialTheme.colorScheme.outline
-        // A 44dp touch target around the 22dp visual circle — taps that land
-        // near the circle toggle the task instead of opening the sheet.
-        Box(
+        CheckCircle(
+            done = done,
+            accent = accent,
+            onClick = onToggle,
+            modifier = Modifier.padding(top = 3.dp),
+        )
+        Column(
             Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .clickable(onClick = onToggle),
-            contentAlignment = Alignment.Center,
+                .weight(1f)
+                .padding(start = 2.dp, top = 10.dp, bottom = 10.dp),
         ) {
-            Box(
-                Modifier
-                    .size(22.dp)
-                    .background(
-                        if (done) MaterialTheme.colorScheme.primary else Color.Transparent,
-                        CircleShape,
-                    )
-                    .then(
-                        if (done) Modifier else Modifier.border(1.5.dp, accent, CircleShape),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (done) {
-                    Icon(
-                        Icons.Filled.Check,
-                        "Completed",
-                        Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.size(8.dp))
-        Column(Modifier.weight(1f)) {
             Text(
                 task.title,
                 style = MaterialTheme.typography.bodyLarge,
@@ -597,51 +755,62 @@ private fun TaskRow(
                     MaterialTheme.colorScheme.onSurface
                 },
             )
-            val meta = buildList {
-                task.dueAt?.let {
-                    val label = if (task.hasDueTime && it.length > 11) {
-                        "${it.take(10)} ${it.substring(11).take(5)}"
-                    } else {
-                        it.take(10)
-                    }
-                    add(label)
-                }
-                listName?.let { add(it.name) }
-                subtaskCount?.let { (doneCount, total) -> add("$doneCount/$total") }
-                taskTags.forEach { add("#$it") }
+            if (task.notes.isNotBlank()) {
+                Text(
+                    task.notes.trim().replace('\n', ' '),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
-            if (meta.isNotEmpty() || Recurrence.fromWire(task.recurrence) != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (Recurrence.fromWire(task.recurrence) != null) {
-                        Icon(
-                            Icons.Filled.Repeat,
-                            "Repeats",
-                            Modifier.size(13.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+
+            val dueDate = dueDateOf(task)
+            val dueTime = dueTimeOf(task)
+            val dueLabel: String? = when (dateMode) {
+                DateMode.Full -> listOfNotNull(
+                    dueDate?.let { friendlyDay(it, today) },
+                    dueTime?.let { friendlyTime(it) },
+                ).joinToString(" · ").ifBlank { null }
+                DateMode.TimeOnly -> dueTime?.let { friendlyTime(it) }
+            }
+            val recurrence = Recurrence.fromWire(task.recurrence)
+            val recurring = recurrence != null
+            val showListPill = showList && list != null
+            val hasMeta = dueLabel != null || recurring || subtaskCount != null ||
+                taskTags.isNotEmpty() || showListPill
+            if (hasMeta) {
+                FlowRow(
+                    Modifier.padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (dueLabel != null || recurring) {
+                        MetaPill(
+                            text = dueLabel ?: recurrence!!.label,
+                            icon = when {
+                                recurring -> Icons.Outlined.Repeat
+                                dueDate != null && dateMode == DateMode.Full -> Icons.Outlined.CalendarToday
+                                else -> Icons.Outlined.Schedule
+                            },
+                            tone = when {
+                                done -> PillTone.Neutral
+                                overdue -> PillTone.Error
+                                dueDate == today -> PillTone.Accent
+                                else -> PillTone.Neutral
+                            },
                         )
-                        Spacer(Modifier.size(4.dp))
                     }
-                    Text(
-                        meta.joinToString("  ·  "),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = if (overdue) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
+                    subtaskCount?.let { (doneCount, total) ->
+                        MetaPill("$doneCount/$total", icon = Icons.Outlined.Checklist)
+                    }
+                    taskTags.forEach { MetaPill("#$it") }
+                    if (showListPill) {
+                        MetaPill(list!!.name, dot = parseHexColor(list.color), tone = PillTone.Plain)
+                    }
                 }
             }
-        }
-        listName?.let {
-            Box(
-                Modifier
-                    .size(8.dp)
-                    .background(parseColor(it.color), CircleShape),
-            )
         }
     }
 }
-
