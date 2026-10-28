@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Schedule
@@ -121,6 +122,7 @@ fun HomeScreen(viewModel: AppViewModel, onOpenSettings: () -> Unit) {
     var showQuickAdd by rememberSaveable { mutableStateOf(false) }
     var editingTaskId by rememberSaveable { mutableStateOf<String?>(null) }
     var showNewList by rememberSaveable { mutableStateOf(false) }
+    var editingListId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(syncState.message) {
         syncState.message?.let { if (syncState.error) snackbar.showSnackbar(it) }
@@ -327,6 +329,11 @@ fun HomeScreen(viewModel: AppViewModel, onOpenSettings: () -> Unit) {
                             }
                         },
                         actions = {
+                            (view as? HomeView.InList)?.let { current ->
+                                IconButton(onClick = { editingListId = current.listId }) {
+                                    Icon(Icons.Outlined.Edit, "Edit list")
+                                }
+                            }
                             if (syncState.config != null) {
                                 if (syncState.syncing) {
                                     CircularProgressIndicator(
@@ -437,13 +444,34 @@ fun HomeScreen(viewModel: AppViewModel, onOpenSettings: () -> Unit) {
     }
 
     if (showNewList) {
-        NewListDialog(
-            onCreate = { name, color ->
+        ListDialog(
+            onSave = { name, color ->
                 viewModel.createList(name, color)
                 showNewList = false
             },
             onDismiss = { showNewList = false },
         )
+    }
+
+    editingListId?.let { id ->
+        val list = lists.firstOrNull { it.id == id }
+        if (list == null) {
+            editingListId = null
+        } else {
+            ListDialog(
+                existing = list,
+                taskCount = tasks.count { it.listId == list.id },
+                onSave = { name, color ->
+                    viewModel.updateList(list, name, color)
+                    editingListId = null
+                },
+                onDelete = {
+                    viewModel.deleteList(list)
+                    editingListId = null
+                },
+                onDismiss = { editingListId = null },
+            )
+        }
     }
 }
 

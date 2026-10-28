@@ -227,6 +227,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateList(list: ListEntity, name: String, color: String) {
+        viewModelScope.launch { repo.updateList(list, name, color) }
+    }
+
+    fun deleteList(list: ListEntity) {
+        if ((_view.value as? HomeView.InList)?.listId == list.id) _view.value = HomeView.Today
+        viewModelScope.launch { repo.deleteList(list.id) }
+    }
+
     // --- Encrypted sync ---------------------------------------------------
 
     fun connectSync(

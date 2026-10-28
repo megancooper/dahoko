@@ -145,6 +145,16 @@ class Repository(private val db: DahokoDb) {
         return id
     }
 
+    suspend fun updateList(list: ListEntity, name: String, color: String) {
+        dao.upsertList(list.copy(name = name, color = color))
+    }
+
+    /** Remove a list; its tasks stay, with no list, mirroring the desktop. */
+    suspend fun deleteList(listId: String) {
+        dao.detachTasksFromList(listId, nowIso())
+        dao.deleteList(listId)
+    }
+
     // --- Sync snapshot mapping -------------------------------------------
 
     suspend fun buildBundleSnapshot(): List<WorkspaceSnapshot> {

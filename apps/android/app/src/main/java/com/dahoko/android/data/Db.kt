@@ -222,6 +222,9 @@ interface DahokoDao {
     @Query("DELETE FROM lists WHERE id = :listId")
     suspend fun deleteList(listId: String)
 
+    @Query("UPDATE tasks SET list_id = NULL, updated_at = :now WHERE list_id = :listId")
+    suspend fun detachTasksFromList(listId: String, now: String)
+
     @Query("DELETE FROM task_completions WHERE task_id = :taskId AND due_date = :dueDate")
     suspend fun deleteCompletion(taskId: String, dueDate: String)
 
