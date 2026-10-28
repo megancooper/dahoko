@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import type { Task } from "@dahoko/core";
 import { DUE_BUCKET_LABELS, groupByDueBucket } from "@dahoko/core";
 import { cn } from "@dahoko/ui";
 import { useStore } from "@/state/store";
 import { TaskCheckbox } from "../task-checkbox";
+import { TaskActionsMenu } from "../task-actions-menu";
 import {
   AgeBars,
   DueLabel,
@@ -24,6 +26,7 @@ export function TaskRow({
   const { toggleComplete, lists, subtasks } = useStore();
   const list = lists.find((l) => l.id === task.listId);
   const mine = subtasks.filter((s) => s.taskId === task.id);
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div
       role="button"
@@ -31,6 +34,10 @@ export function TaskRow({
       onClick={() => onSelect(task.id)}
       onKeyDown={(event) => {
         if (event.key === "Enter") onSelect(task.id);
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setMenuOpen(true);
       }}
       className={cn(
         "group flex animate-fade-in-up cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2 transition-colors duration-150 hover:border-border/80 hover:bg-muted/60 hover:shadow-soft",
@@ -64,6 +71,16 @@ export function TaskRow({
           </span>
         ) : null}
         <DueLabel task={task} />
+        <TaskActionsMenu
+          task={task}
+          onOpenTask={onSelect}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          className={cn(
+            "-mr-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100",
+            selected && "opacity-100",
+          )}
+        />
       </span>
     </div>
   );

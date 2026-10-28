@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Schedule
@@ -59,7 +60,12 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -72,6 +78,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -367,6 +374,19 @@ fun HomeScreen(viewModel: AppViewModel, onOpenSettings: () -> Unit) {
                         .mapValues { (_, rows) -> rows.count { it.done } to rows.size },
                     onToggle = viewModel::toggleComplete,
                     onOpen = { editingTaskId = it.id },
+                    onDelete = { task ->
+                        scope.launch {
+                            val snapshot = viewModel.deleteTaskForUndo(task)
+                            val result = snackbar.showSnackbar(
+                                message = "Task deleted",
+                                actionLabel = "Undo",
+                                duration = SnackbarDuration.Short,
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                viewModel.restoreTask(snapshot)
+                            }
+                        }
+                    },
                 )
             }
         }
@@ -442,6 +462,7 @@ private fun TaskListContent(
     subtaskCounts: Map<String, Pair<Int, Int>>,
     onToggle: (TaskEntity) -> Unit,
     onOpen: (TaskEntity) -> Unit,
+    onDelete: (TaskEntity) -> Unit,
 ) {
     val today = LocalDate.now()
     val open = tasks.filter { it.completedAt == null }
@@ -522,18 +543,20 @@ private fun TaskListContent(
                         color = cardColor,
                         modifier = Modifier.animateItem(),
                     ) {
-                        TaskRow(
-                            task = task,
-                            today = today,
-                            overdue = overdue,
-                            dateMode = if (overdue) DateMode.Full else dateMode,
-                            list = task.listId?.let { listsById[it] },
-                            showList = showList,
-                            taskTags = tags[task.id] ?: emptyList(),
-                            subtaskCount = subtaskCounts[task.id],
-                            onToggle = { onToggle(task) },
-                            onOpen = { onOpen(task) },
-                        )
+                        SwipeToDeleteRow(cardColor = cardColor, onDelete = { onDelete(task) }) {
+                            TaskRow(
+                                task = task,
+                                today = today,
+                                overdue = overdue,
+                                dateMode = if (overdue) DateMode.Full else dateMode,
+                                list = task.listId?.let { listsById[it] },
+                                showList = showList,
+                                taskTags = tags[task.id] ?: emptyList(),
+                                subtaskCount = subtaskCounts[task.id],
+                                onToggle = { onToggle(task) },
+                                onOpen = { onOpen(task) },
+                            )
+                        }
                     }
                 }
             }
@@ -583,22 +606,76 @@ private fun TaskListContent(
                         color = cardColor,
                         modifier = Modifier.animateItem(),
                     ) {
-                        TaskRow(
-                            task = task,
-                            today = today,
-                            overdue = false,
-                            dateMode = DateMode.Full,
-                            list = task.listId?.let { listsById[it] },
-                            showList = showList,
-                            taskTags = tags[task.id] ?: emptyList(),
-                            subtaskCount = subtaskCounts[task.id],
-                            onToggle = { onToggle(task) },
-                            onOpen = { onOpen(task) },
-                        )
+                        SwipeToDeleteRow(cardColor = cardColor, onDelete = { onDelete(task) }) {
+                            TaskRow(
+                                task = task,
+                                today = today,
+                                overdue = false,
+                                dateMode = DateMode.Full,
+                                list = task.listId?.let { listsById[it] },
+                                showList = showList,
+                                taskTags = tags[task.id] ?: emptyList(),
+                                subtaskCount = subtaskCounts[task.id],
+                                onToggle = { onToggle(task) },
+                                onOpen = { onOpen(task) },
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * Swipe a row right-to-left to delete it. The caller shows the Undo
+ * snackbar; the row is removed as soon as the store emits without it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToDeleteRow(
+    cardColor: Color,
+    onDelete: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val currentOnDelete by rememberUpdatedState(onDelete)
+    val state = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                currentOnDelete()
+                true
+            } else {
+                false
+            }
+        },
+        positionalThreshold = { distance -> distance * 0.4f },
+    )
+    SwipeToDismissBox(
+        state = state,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            val armed = state.targetValue == SwipeToDismissBoxValue.EndToStart
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        if (armed) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.errorContainer,
+                    )
+                    .padding(end = 22.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Icon(
+                    Icons.Outlined.Delete,
+                    "Delete task",
+                    Modifier.size(22.dp),
+                    tint = if (armed) MaterialTheme.colorScheme.onError
+                    else MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+        },
+    ) {
+        Box(Modifier.background(cardColor)) { content() }
     }
 }
 

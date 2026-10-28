@@ -4,6 +4,7 @@ import {
   useDroppable,
 } from "@dnd-kit/react";
 import { pointerIntersection } from "@dnd-kit/collision";
+import { useState } from "react";
 import { GripVertical } from "lucide-react";
 import type { Status, Task } from "@dahoko/core";
 import { groupByStatus } from "@dahoko/core";
@@ -14,6 +15,7 @@ import {
   cn,
 } from "@dahoko/ui";
 import { useStore } from "@/state/store";
+import { TaskActionsMenu } from "../task-actions-menu";
 import {
   AgeBars,
   DueLabel,
@@ -38,12 +40,17 @@ function BoardCard({
     data: { statusId: task.statusId },
   });
   const mine = subtasks.filter((subtask) => subtask.taskId === task.id);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div
       ref={ref}
       data-task-id={task.id}
       data-status-id={task.statusId}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setMenuOpen(true);
+      }}
       className={cn(
         "group/card relative mb-2 rounded-md border border-border bg-card shadow-soft transition-[border-color,box-shadow,opacity] duration-150 ease-out-strong",
         "hover:shadow-md",
@@ -57,7 +64,7 @@ function BoardCard({
         type="button"
         aria-pressed={selected}
         onClick={() => onSelect(task.id)}
-        className="block w-full rounded-md px-3 py-2.5 pr-10 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+        className="block w-full rounded-md px-3 py-2.5 pr-[4.25rem] text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
       >
         <span
           data-done={task.completedAt !== null}
@@ -93,6 +100,13 @@ function BoardCard({
         </TooltipTrigger>
         <TooltipContent side="top">Drag to another swimlane</TooltipContent>
       </Tooltip>
+      <TaskActionsMenu
+        task={task}
+        onOpenTask={onSelect}
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        className="absolute right-9 top-1.5 opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+      />
     </div>
   );
 }

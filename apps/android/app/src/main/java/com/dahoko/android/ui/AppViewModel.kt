@@ -8,6 +8,7 @@ import com.dahoko.android.DahokoApp
 import com.dahoko.android.data.ListEntity
 import com.dahoko.android.data.StatusEntity
 import com.dahoko.android.data.SubtaskEntity
+import com.dahoko.android.data.CompletionEntity
 import com.dahoko.android.data.TaskEntity
 import com.dahoko.android.data.TaskTagEntity
 import com.dahoko.android.data.WorkspaceEntity
@@ -163,6 +164,35 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteTask(taskId: String) {
         viewModelScope.launch { repo.deleteTask(taskId) }
+    }
+
+    /** Everything a delete removes, kept so an Undo can put it all back. */
+    data class DeletedTask(
+        val task: TaskEntity,
+        val tags: List<TaskTagEntity>,
+        val subtasks: List<SubtaskEntity>,
+        val completions: List<CompletionEntity>,
+    )
+
+    /** Delete [task] and return a snapshot for [restoreTask]. */
+    suspend fun deleteTaskForUndo(task: TaskEntity): DeletedTask {
+        val snapshot = DeletedTask(
+            task = task,
+            tags = (tags.value[task.id] ?: emptyList()).map { TaskTagEntity(task.id, it) },
+            subtasks = subtasks.value.filter { it.taskId == task.id },
+            completions = repo.dao.allCompletions().filter { it.taskId == task.id },
+        )
+        repo.deleteTask(task.id)
+        return snapshot
+    }
+
+    fun restoreTask(snapshot: DeletedTask) {
+        viewModelScope.launch {
+            repo.dao.upsertTask(snapshot.task)
+            if (snapshot.tags.isNotEmpty()) repo.dao.insertTags(snapshot.tags)
+            snapshot.subtasks.forEach { repo.dao.upsertSubtask(it) }
+            snapshot.completions.forEach { repo.dao.upsertCompletion(it) }
+        }
     }
 
     fun addSubtask(taskId: String, title: String) {
