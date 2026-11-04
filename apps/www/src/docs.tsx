@@ -35,6 +35,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type AnchorHTMLAttributes,
   type ReactNode,
 } from "react";
 import {
@@ -46,7 +47,8 @@ import {
 
 const REPO_URL = "https://github.com/megancooper/dahoko";
 
-interface InternalLinkProps {
+interface InternalLinkProps
+  extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onClick"> {
   href: string;
   className?: string;
   children: ReactNode;
@@ -58,9 +60,11 @@ export function InternalLink({
   className,
   children,
   onNavigate,
+  ...rest
 }: InternalLinkProps) {
   return (
     <a
+      {...rest}
       href={href}
       className={className}
       onClick={(event) => {
