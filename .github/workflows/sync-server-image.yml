@@ -97,7 +97,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
           INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
-          INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID || '59b3e1c1-4338-4718-8485-79823cb3aca5' }}
+          INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID || '282e937b-3db1-4b33-8ff5-f8eefa0dd0d4' }}
           INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
         working-directory: apps/sync-server
         run: |
@@ -130,7 +130,11 @@ jobs:
             if [ -z "$value" ]; then
               missing="$missing $key"
             else
-              printf '%s=%s\n' "$key" "$value" >> .fly-secrets
+              # Double-quote the value: `flyctl secrets import` treats an
+              # unquoted `#` as the start of a comment, which silently
+              # truncated DAHOKO_BILLING_CANCEL_URL=https://dahoko.com/#cloud
+              # to https://dahoko.com/. Quotes are stripped on import.
+              printf '%s="%s"\n' "$key" "$value" >> .fly-secrets
             fi
           done
           if [ -n "$missing" ]; then

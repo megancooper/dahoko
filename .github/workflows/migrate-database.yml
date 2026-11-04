@@ -49,7 +49,7 @@ jobs:
           DIRECT_DATABASE_URL: ${{ secrets.DATABASE_URL }}
           INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
           INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
-          INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID || '59b3e1c1-4338-4718-8485-79823cb3aca5' }}
+          INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID || '282e937b-3db1-4b33-8ff5-f8eefa0dd0d4' }}
           INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
         run: |
           if [ -n "$DIRECT_DATABASE_URL" ]; then
